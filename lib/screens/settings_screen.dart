@@ -18,7 +18,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final SettingsRepository _settingsRepo = SettingsRepository();
   final TextEditingController _googleClientIdController = TextEditingController();
-  final TextEditingController _updateUrlController = TextEditingController();
   
   bool _externalSyncEnabled = true;
   bool _generativeAiEnabled = true;
@@ -42,8 +41,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } else {
       _googleClientIdController.text = AuthRepository.defaultWebClientId;
     }
-    
-    await _loadUpdateUrl();
 
     setState(() {
       _externalSyncEnabled = syncEnabled;
@@ -174,7 +171,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   // Version info
                   Center(
                     child: Text(
-                      'Atlas v${UpdateService.currentVersion} • Local First',
+                      'Atlas Version ${UpdateService.currentVersion} • Local First',
                       style: TextStyle(color: Theme.of(context).colorScheme.secondary, fontSize: 12),
                     ),
                   ),
@@ -430,28 +427,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Future<void> _loadUpdateUrl() async {
-    final url = await _settingsRepo.getUpdateCheckUrl();
-    if (url != null) {
-      _updateUrlController.text = url;
-    } else {
-      _updateUrlController.text = UpdateService.defaultUpdateCheckUrl;
-    }
-  }
-
-  Future<void> _saveUpdateUrl() async {
-    final url = _updateUrlController.text.trim();
-    await _settingsRepo.saveUpdateCheckUrl(url);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Update URL saved successfully.')),
-      );
-    }
-  }
-
   Future<void> _checkManualUpdates() async {
-    final url = _updateUrlController.text.trim();
-    await _settingsRepo.saveUpdateCheckUrl(url);
     setState(() {
       _checkingUpdates = true;
     });
@@ -490,57 +466,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               children: [
                 Icon(Icons.system_update_alt, size: 16, color: Colors.blueAccent),
                 SizedBox(width: 8),
-                Text('Update Preferences', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('App Updates', style: TextStyle(fontWeight: FontWeight.bold)),
               ],
             ),
             const SizedBox(height: 8),
             const Text(
-              'Enter the version metadata URL containing the update info JSON to check for the latest releases.',
+              'Check for the latest features, bug fixes, and improvements for Atlas.',
               style: TextStyle(fontSize: 12, height: 1.4),
             ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _updateUrlController,
-                    decoration: const InputDecoration(
-                      hintText: 'Enter Update Metadata URL',
-                      contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _checkingUpdates ? null : _checkManualUpdates,
+                icon: _checkingUpdates
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.refresh, size: 18),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).primaryColor,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+                label: Text(
+                  _checkingUpdates ? 'Checking...' : 'Check for Updates',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onPrimary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                ElevatedButton(
-                  onPressed: _checkingUpdates ? null : _checkManualUpdates,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).primaryColor,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: _checkingUpdates
-                      ? SizedBox(
-                          height: 16,
-                          width: 16,
-                          child: CircularProgressIndicator(
-                            color: Theme.of(context).colorScheme.onPrimary,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : Text('Check for Updates', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
-                ),
-                OutlinedButton(
-                  onPressed: _saveUpdateUrl,
-                  style: OutlinedButton.styleFrom(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: const Text('Save URL'),
-                ),
-              ],
+              ),
             ),
           ],
         ),
@@ -554,7 +513,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         children: [
           Icon(Icons.system_update, color: Theme.of(context).primaryColor),
           const SizedBox(width: 10),
-          const Text('New Update Available'),
+          const Text('Update Available!'),
         ],
       ),
       content: Column(
@@ -562,31 +521,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Version: ${info.version} (Build ${info.buildNumber})',
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'What\'s New:',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          ),
-          const SizedBox(height: 4),
-          Container(
-            width: double.maxFinite,
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              info.releaseNotes,
-              style: const TextStyle(fontSize: 12, height: 1.4),
+            'Yes, latest update is available!',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: Theme.of(context).primaryColor,
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Do you want to download and install this update now?',
-            style: TextStyle(fontSize: 13),
+          Text(
+            '"${info.releaseNotes}"',
+            style: const TextStyle(
+              fontStyle: FontStyle.italic,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'are included in this update version ${info.version}.',
+            style: const TextStyle(fontSize: 13),
           ),
         ],
       ),
@@ -595,7 +549,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Later'),
         ),
-        ElevatedButton(
+        ElevatedButton.icon(
           onPressed: () async {
             Navigator.pop(context);
             final uri = Uri.parse(info.downloadUrl);
@@ -609,10 +563,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               }
             }
           },
+          icon: const Icon(Icons.download, size: 16),
           style: ElevatedButton.styleFrom(
             backgroundColor: Theme.of(context).primaryColor,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          child: Text('Update Now', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
+          label: Text(
+            'Download Latest Update',
+            style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
+          ),
         ),
       ],
     );

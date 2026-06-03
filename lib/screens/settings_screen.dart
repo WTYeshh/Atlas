@@ -5,6 +5,7 @@ import '../providers/theme_provider.dart';
 import '../repositories/settings_repository.dart';
 import '../repositories/auth_repository.dart';
 import '../services/update_service.dart';
+import '../services/sync_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -16,36 +17,80 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final SettingsRepository _settingsRepo = SettingsRepository();
-  final TextEditingController _apiKeyController = TextEditingController();
   final TextEditingController _googleClientIdController = TextEditingController();
   final TextEditingController _updateUrlController = TextEditingController();
-  bool _loadingKey = true;
+  
+  bool _externalSyncEnabled = true;
+  bool _generativeAiEnabled = true;
+  bool _loadingSettings = true;
   bool _loadingGoogleClientId = true;
   bool _checkingUpdates = false;
 
   @override
   void initState() {
     super.initState();
-    _loadApiKey();
-    _loadGoogleClientId();
-    _loadUpdateUrl();
+    _loadSettings();
   }
 
-  Future<void> _loadApiKey() async {
-    final key = await _settingsRepo.getGeminiApiKey();
-    if (key != null) {
-      _apiKeyController.text = key;
+  Future<void> _loadSettings() async {
+    final syncEnabled = await _settingsRepo.getExternalSyncEnabled();
+    final aiEnabled = await _settingsRepo.getGenerativeAiEnabled();
+    
+    final clientId = await _settingsRepo.getGoogleClientId();
+    if (clientId != null && clientId.trim().isNotEmpty) {
+      _googleClientIdController.text = clientId;
+    } else {
+      _googleClientIdController.text = AuthRepository.defaultWebClientId;
     }
+    
+    await _loadUpdateUrl();
+
     setState(() {
-      _loadingKey = false;
+      _externalSyncEnabled = syncEnabled;
+      _generativeAiEnabled = aiEnabled;
+      _loadingSettings = false;
+      _loadingGoogleClientId = false;
     });
   }
 
-  Future<void> _saveApiKey() async {
-    final key = _apiKeyController.text.trim();
-    await _settingsRepo.saveGeminiApiKey(key);
+  Future<void> _toggleExternalSync(bool value) async {
+    await _settingsRepo.saveExternalSyncEnabled(value);
+    setState(() {
+      _externalSyncEnabled = value;
+    });
+
+    if (value) {
+      // Trigger sign-in if they don't have a linked Google account
+      final authState = ref.read(authProvider);
+      if (authState.userEmail == null || authState.userEmail == 'No Google Account linked') {
+        final success = await ref.read(authProvider.notifier).signInAfterToggle();
+        if (!success) {
+          // If sign-in is cancelled/fails, revert the toggle
+          await _settingsRepo.saveExternalSyncEnabled(false);
+          setState(() {
+            _externalSyncEnabled = false;
+          });
+          return;
+        }
+      }
+      
+      // Auto-trigger sync
+      final syncService = ref.read(syncServiceProvider);
+      await syncService.syncAll();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Google sync disabled. Operating in local mode.')),
+      );
+    }
+  }
+
+  Future<void> _toggleGenerativeAi(bool value) async {
+    await _settingsRepo.saveGenerativeAiEnabled(value);
+    setState(() {
+      _generativeAiEnabled = value;
+    });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Gemini API Key saved successfully.')),
+      SnackBar(content: Text('Generative AI features ${value ? 'enabled' : 'disabled'}.')),
     );
   }
 
@@ -85,53 +130,57 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       appBar: AppBar(
         title: const Text('Settings'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Account Card
-            _buildSectionHeader('Account Connection'),
-            const SizedBox(height: 8),
-            _buildAccountCard(context, authState),
-            const SizedBox(height: 24),
+      body: _loadingSettings
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Account Card
+                  _buildSectionHeader('Account Connection'),
+                  const SizedBox(height: 8),
+                  _buildAccountCard(context, authState),
+                  const SizedBox(height: 24),
 
-            // Integration Keys configuration
-            _buildSectionHeader('Credentials & API Keys'),
-            const SizedBox(height: 8),
-            _buildGeminiConfigCard(context),
-            const SizedBox(height: 12),
-            _buildGoogleClientIdConfigCard(context),
-            const SizedBox(height: 24),
+                  // Integrations & AI Config
+                  _buildSectionHeader('Integrations & AI Config'),
+                  const SizedBox(height: 8),
+                  _buildExternalSyncCard(context),
+                  const SizedBox(height: 12),
+                  _buildGeminiConfigCard(context),
+                  const SizedBox(height: 12),
+                  _buildGoogleClientIdConfigCard(context),
+                  const SizedBox(height: 24),
 
-            // Interface customization
-            _buildSectionHeader('Appearance'),
-            const SizedBox(height: 8),
-            _buildThemeConfigCard(context, themeMode),
-            const SizedBox(height: 24),
+                  // Interface customization
+                  _buildSectionHeader('Appearance'),
+                  const SizedBox(height: 8),
+                  _buildThemeConfigCard(context, themeMode),
+                  const SizedBox(height: 24),
 
-            // Notification configurations
-            _buildSectionHeader('Alert Preferences'),
-            const SizedBox(height: 8),
-            _buildNotificationConfigCard(context),
-            const SizedBox(height: 24),
+                  // Notification configurations
+                  _buildSectionHeader('Alert Preferences'),
+                  const SizedBox(height: 8),
+                  _buildNotificationConfigCard(context),
+                  const SizedBox(height: 24),
 
-            // App Updates Configurations
-            _buildSectionHeader('App Updates'),
-            const SizedBox(height: 8),
-            _buildUpdateConfigCard(context),
-            const SizedBox(height: 40),
+                  // App Updates Configurations
+                  _buildSectionHeader('App Updates'),
+                  const SizedBox(height: 8),
+                  _buildUpdateConfigCard(context),
+                  const SizedBox(height: 40),
 
-            // Version info
-            Center(
-              child: Text(
-                'Atlas v${UpdateService.currentVersion} • Local First',
-                style: TextStyle(color: Theme.of(context).colorScheme.secondary, fontSize: 12),
+                  // Version info
+                  Center(
+                    child: Text(
+                      'Atlas v${UpdateService.currentVersion} • Local First',
+                      style: TextStyle(color: Theme.of(context).colorScheme.secondary, fontSize: 12),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -143,6 +192,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildAccountCard(BuildContext context, AuthState authState) {
+    final bool isOffline = !_externalSyncEnabled || authState.userEmail == 'No Google Account linked';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -150,9 +200,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             CircleAvatar(
               backgroundColor: Theme.of(context).primaryColor.withOpacity(0.05),
-              backgroundImage: authState.userPhotoUrl != null ? NetworkImage(authState.userPhotoUrl!) : null,
-              child: authState.userPhotoUrl == null
-                  ? Icon(Icons.person, color: Theme.of(context).primaryColor)
+              backgroundImage: (authState.userPhotoUrl != null && !isOffline)
+                  ? NetworkImage(authState.userPhotoUrl!)
+                  : null,
+              child: (authState.userPhotoUrl == null || isOffline)
+                  ? Icon(isOffline ? Icons.cloud_off : Icons.person, color: Theme.of(context).primaryColor)
                   : null,
             ),
             const SizedBox(width: 16),
@@ -161,11 +213,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    authState.userName ?? 'Offline User',
+                    isOffline ? 'Local Offline User' : (authState.userName ?? 'Offline User'),
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                   Text(
-                    authState.userEmail ?? 'No Google Account linked',
+                    isOffline ? 'Google Sync is disabled' : (authState.userEmail ?? 'No Google Account linked'),
                     style: TextStyle(color: Theme.of(context).colorScheme.secondary, fontSize: 13),
                   ),
                 ],
@@ -185,6 +237,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  Widget _buildExternalSyncCard(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.cloud_sync, size: 16, color: Colors.blueAccent),
+                    SizedBox(width: 8),
+                    Text('Google Integration & Sync', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                Switch(
+                  value: _externalSyncEnabled,
+                  onChanged: _toggleExternalSync,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Sync calendars, back up academic notes to Google Drive, and access Google integration features.',
+              style: TextStyle(fontSize: 12, height: 1.4),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildGeminiConfigCard(BuildContext context) {
     return Card(
       child: Padding(
@@ -192,45 +278,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.auto_awesome, size: 16, color: Colors.indigoAccent),
-                SizedBox(width: 8),
-                Text('Gemini Generative AI Key', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Row(
+                  children: [
+                    Icon(Icons.auto_awesome, size: 16, color: Colors.indigoAccent),
+                    SizedBox(width: 8),
+                    Text('Generative AI Features', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                Switch(
+                  value: _generativeAiEnabled,
+                  onChanged: _toggleGenerativeAi,
+                ),
               ],
             ),
             const SizedBox(height: 8),
             const Text(
-              'Input your Gemini API key to enable document indexing, smart scheduling classifications, summaries, and conversational chat helper functions.',
+              'Enable document indexing, smart scheduling classifications, automatic notes summaries, and conversational chat helper functions powered by Gemini AI.',
               style: TextStyle(fontSize: 12, height: 1.4),
             ),
-            const SizedBox(height: 14),
-            if (_loadingKey)
-              const Center(child: CircularProgressIndicator())
-            else
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _apiKeyController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        hintText: 'Enter API Key',
-                        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: _saveApiKey,
-                    child: Text('Save', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).primaryColor,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ],
-              ),
           ],
         ),
       ),
@@ -238,23 +306,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildGoogleClientIdConfigCard(BuildContext context) {
+    final bool isSyncEnabled = _externalSyncEnabled;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
               children: [
-                Icon(Icons.login, size: 16, color: Colors.blueAccent),
-                SizedBox(width: 8),
-                Text('Google Sign-In Client ID (Web)', style: TextStyle(fontWeight: FontWeight.bold)),
+                Icon(Icons.login, size: 16, color: isSyncEnabled ? Colors.blueAccent : Colors.grey),
+                const SizedBox(width: 8),
+                Text(
+                  'Google Sign-In Client ID (Web)',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isSyncEnabled ? null : Theme.of(context).disabledColor,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Input your Google OAuth Client ID to configure the authentication flow for Google Calendar, Drive, and Sign-in.',
-              style: TextStyle(fontSize: 12, height: 1.4),
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: isSyncEnabled ? null : Theme.of(context).disabledColor,
+              ),
             ),
             const SizedBox(height: 14),
             if (_loadingGoogleClientId)
@@ -265,24 +344,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   Expanded(
                     child: TextField(
                       controller: _googleClientIdController,
-                      obscureText: false,
-                      decoration: const InputDecoration(
+                      enabled: isSyncEnabled,
+                      decoration: InputDecoration(
                         hintText: 'Enter Google Client ID',
-                        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       ),
                     ),
                   ),
                   const SizedBox(width: 10),
                   ElevatedButton(
-                    onPressed: _saveGoogleClientId,
+                    onPressed: isSyncEnabled ? _saveGoogleClientId : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).primaryColor,
+                      backgroundColor: isSyncEnabled ? Theme.of(context).primaryColor : Theme.of(context).disabledColor,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     child: Text('Save', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
                   ),
                 ],
               ),
+            if (!isSyncEnabled) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Enable Google Integration & Sync above to configure this.',
+                style: TextStyle(fontSize: 11, color: Colors.orangeAccent),
+              ),
+            ],
           ],
         ),
       ),

@@ -3,16 +3,24 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import '../repositories/settings_repository.dart';
 import '../models/note_model.dart';
 import '../models/chat_message.dart';
+import '../core/config.dart';
 
 class GeminiService {
   final SettingsRepository _settingsRepo = SettingsRepository();
   
   Future<GenerativeModel?> _getModel({String modelName = 'gemini-1.5-flash'}) async {
-    final apiKey = await _settingsRepo.getGeminiApiKey();
-    if (apiKey == null || apiKey.trim().isEmpty) {
-      print('Gemini API Key is not configured. AI operations are unavailable.');
+    final aiEnabled = await _settingsRepo.getGenerativeAiEnabled();
+    if (!aiEnabled) {
+      print('GeminiService: Generative AI features are disabled in Settings.');
       return null;
     }
+
+    const apiKey = AppConfig.geminiApiKey;
+    if (apiKey.isEmpty || apiKey == 'YOUR_GEMINI_API_KEY_HERE') {
+      print('GeminiService: Gemini API Key is not configured in AppConfig.');
+      return null;
+    }
+
     return GenerativeModel(
       model: modelName,
       apiKey: apiKey,
@@ -68,8 +76,11 @@ class GeminiService {
   // AI-generated summary for Notes Vault
   Future<String?> generateSummary(String text) async {
     // Normal text model (no JSON enforcement config)
-    final apiKey = await _settingsRepo.getGeminiApiKey();
-    if (apiKey == null) return null;
+    final aiEnabled = await _settingsRepo.getGenerativeAiEnabled();
+    if (!aiEnabled) return null;
+
+    const apiKey = AppConfig.geminiApiKey;
+    if (apiKey.isEmpty || apiKey == 'YOUR_GEMINI_API_KEY_HERE') return null;
     
     final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: apiKey);
     final prompt = 'Summarize the following note or document content into 3 concise bullet points under a header:\n\n$text';
@@ -90,9 +101,14 @@ class GeminiService {
     required List<dynamic> upcomingEventsAndTasks,
     required List<ChatMessage> history,
   }) async {
-    final apiKey = await _settingsRepo.getGeminiApiKey();
-    if (apiKey == null || apiKey.trim().isEmpty) {
-      return 'Please set up your Gemini API Key in the Settings page to chat with me.';
+    final aiEnabled = await _settingsRepo.getGenerativeAiEnabled();
+    if (!aiEnabled) {
+      return 'Generative AI assistant features are currently disabled in Settings. Please enable them to chat.';
+    }
+
+    const apiKey = AppConfig.geminiApiKey;
+    if (apiKey.isEmpty || apiKey == 'YOUR_GEMINI_API_KEY_HERE') {
+      return 'Generative AI assistant is not configured. Please define the Gemini API Key constant inside the application code.';
     }
 
     final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: apiKey);

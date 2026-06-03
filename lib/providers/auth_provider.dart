@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../repositories/auth_repository.dart';
+import '../repositories/settings_repository.dart';
 
 class AuthState {
   final bool isAuthenticated;
@@ -55,8 +56,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> _init() async {
     try {
+      final settingsRepo = SettingsRepository();
+      final syncEnabled = await settingsRepo.getExternalSyncEnabled();
       final profile = await _authRepo.getLocalProfile();
-      if (profile['email'] != null) {
+
+      if (!syncEnabled) {
+        // If Google Sync is disabled, log in directly as offline user
+        state = AuthState(
+          isAuthenticated: true,
+          isLoading: false,
+          userName: profile['name'] ?? 'Offline User',
+          userEmail: profile['email'] ?? 'No Google Account linked',
+          userPhotoUrl: profile['photoUrl'],
+        );
+      } else if (profile['email'] != null) {
         state = AuthState(
           isAuthenticated: true,
           isLoading: false,
@@ -87,6 +100,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> useOfflineMode() async {
+    state = state.copyWith(isLoading: true);
+    final settingsRepo = SettingsRepository();
+    await settingsRepo.saveExternalSyncEnabled(false);
+    state = AuthState(
+      isAuthenticated: true,
+      isLoading: false,
+      userName: 'Offline User',
+      userEmail: 'No Google Account linked',
+    );
+  }
+
   Future<void> signIn() async {
     state = state.copyWith(isLoading: true);
     final success = await _authRepo.signIn();
@@ -107,6 +132,28 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  Future<bool> signInAfterToggle() async {
+    state = state.copyWith(isLoading: true);
+    final success = await _authRepo.signIn();
+    if (success) {
+      final profile = await _authRepo.getLocalProfile();
+      state = AuthState(
+        isAuthenticated: true,
+        isLoading: false,
+        userName: profile['name'],
+        userEmail: profile['email'],
+        userPhotoUrl: profile['photoUrl'],
+      );
+      return true;
+    } else {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Google Sign-in failed. Please try again.',
+      );
+      return false;
+    }
+  }
+
   Future<void> refreshProfile() async {
     final profile = await _authRepo.getLocalProfile();
     if (profile['email'] != null) {
@@ -123,6 +170,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> signOut() async {
     state = state.copyWith(isLoading: true);
     await _authRepo.signOut();
+    final settingsRepo = SettingsRepository();
+    // Reset external sync to default (true) so they can login/re-select on next start
+    await settingsRepo.saveExternalSyncEnabled(true);
     state = AuthState(isAuthenticated: false, isLoading: false);
   }
 }

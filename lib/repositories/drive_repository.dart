@@ -4,11 +4,13 @@ import 'package:googleapis/drive/v3.dart' as google_drive;
 import 'package:path/path.dart' as p;
 import 'database_repository.dart';
 import 'auth_repository.dart';
+import 'settings_repository.dart';
 import '../models/note_model.dart';
 
 class DriveRepository {
   final DatabaseRepository _dbRepo;
   final AuthRepository _authRepo;
+  final SettingsRepository _settingsRepo = SettingsRepository();
 
   DriveRepository(this._dbRepo, this._authRepo);
 
@@ -56,6 +58,11 @@ class DriveRepository {
 
   // Upload file to organized directories in Google Drive: Atlas -> [Subject/Category] -> File
   Future<String?> uploadNoteFile(NoteModel note) async {
+    final syncEnabled = await _settingsRepo.getExternalSyncEnabled();
+    if (!syncEnabled) {
+      print('DriveRepository: External sync is disabled. Skipping Google Drive upload.');
+      return null;
+    }
     if (kIsWeb) {
       print('DriveRepository: File upload not supported on Web preview.');
       return null;
@@ -131,6 +138,11 @@ class DriveRepository {
 
   // Upload text note content as Google Doc or Text file
   Future<String?> uploadTextNote(NoteModel note) async {
+    final syncEnabled = await _settingsRepo.getExternalSyncEnabled();
+    if (!syncEnabled) {
+      print('DriveRepository: External sync is disabled. Skipping Google Drive upload.');
+      return null;
+    }
     if (kIsWeb) {
       print('DriveRepository: Text note upload not supported on Web preview.');
       return null;

@@ -97,6 +97,27 @@ class AuthScreen extends ConsumerWidget {
                   elevation: 0,
                 ),
               ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: authState.isLoading
+                    ? null
+                    : () => ref.read(authProvider.notifier).useOfflineMode(),
+                icon: Icon(Icons.cloud_off, color: Theme.of(context).primaryColor),
+                label: Text(
+                  'Continue in Offline Mode',
+                  style: TextStyle(
+                    color: Theme.of(context).primaryColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  side: BorderSide(color: Theme.of(context).dividerColor),
+                ),
+              ),
               const SizedBox(height: 24),
               
               // Security details

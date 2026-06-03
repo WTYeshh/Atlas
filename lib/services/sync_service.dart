@@ -116,6 +116,15 @@ class SyncService {
       // 0. Perform local storage cleanup (manual past events & completed tasks > 60 mins)
       await _cleanupExpiredStorage();
 
+      final syncEnabled = await _settingsRepo.getExternalSyncEnabled();
+      if (!syncEnabled) {
+        print('SyncService: External Google sync is disabled by user setting.');
+        final lastTime = DateFormat('jm').format(DateTime.now());
+        await _settingsRepo.saveSyncStatus(status: 'success', lastSyncedTime: lastTime);
+        _ref.read(syncStatusProvider.notifier).updateStatus('success', lastTime);
+        return;
+      }
+
       final online = await isOnline();
       if (!online) {
         throw const SocketException('Offline');

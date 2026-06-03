@@ -63,6 +63,26 @@ class SettingsRepository {
     await deleteSetting('gemini_api_key');
   }
 
+  // External Sync (Google Integration & Sync)
+  Future<void> saveExternalSyncEnabled(bool enabled) async {
+    await saveSetting('external_sync_enabled', enabled.toString());
+  }
+
+  Future<bool> getExternalSyncEnabled() async {
+    final val = await getSetting('external_sync_enabled');
+    return val == null ? true : val == 'true';
+  }
+
+  // Generative AI Enabled
+  Future<void> saveGenerativeAiEnabled(bool enabled) async {
+    await saveSetting('generative_ai_enabled', enabled.toString());
+  }
+
+  Future<bool> getGenerativeAiEnabled() async {
+    final val = await getSetting('generative_ai_enabled');
+    return val == null ? true : val == 'true';
+  }
+
   // Google Client ID
   Future<void> saveGoogleClientId(String clientId) async {
     await saveSetting('google_client_id', clientId);

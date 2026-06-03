@@ -98,9 +98,9 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
           onPressed: () async {
             Navigator.pop(context);
             final uri = Uri.parse(info.downloadUrl);
-            if (await canLaunchUrl(uri)) {
+            try {
               await launchUrl(uri, mode: LaunchMode.externalApplication);
-            } else {
+            } catch (_) {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Could not open download link.')),

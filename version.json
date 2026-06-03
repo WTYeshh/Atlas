@@ -1,6 +1,6 @@
 {
-  "version": "1.0.2",
-  "build_number": 3,
-  "release_notes": "Fixes Chatbot API connection error, restores user text visibility in dark theme, and formats all dates as DD-MM-YY across the entire app.",
-  "download_url": "https://files.catbox.moe/uy3o5j.apk"
+  "version": "1.0.3",
+  "build_number": 4,
+  "release_notes": "Changes app logo to a newly designed minimalist grid icon, and enables update verification flow.",
+  "download_url": "https://files.catbox.moe/ka745x.apk"
 }

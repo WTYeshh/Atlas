@@ -8,7 +8,7 @@ import '../core/config.dart';
 class GeminiService {
   final SettingsRepository _settingsRepo = SettingsRepository();
   
-  Future<GenerativeModel?> _getModel({String modelName = 'gemini-1.5-flash'}) async {
+  Future<GenerativeModel?> _getModel({String modelName = 'gemini-2.5-flash'}) async {
     final aiEnabled = await _settingsRepo.getGenerativeAiEnabled();
     if (!aiEnabled) {
       print('GeminiService: Generative AI features are disabled in Settings.');
@@ -82,7 +82,7 @@ class GeminiService {
     const apiKey = AppConfig.geminiApiKey;
     if (apiKey.isEmpty || apiKey == 'YOUR_GEMINI_API_KEY_HERE') return null;
     
-    final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: apiKey);
+    final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: apiKey);
     final prompt = 'Summarize the following note or document content into 3 concise bullet points under a header:\n\n$text';
 
     try {
@@ -111,7 +111,7 @@ class GeminiService {
       return 'Generative AI assistant is not configured. Please define the Gemini API Key constant inside the application code.';
     }
 
-    final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: apiKey);
+    final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: apiKey);
 
     // Format local notes context
     final notesContext = notes.map((n) {

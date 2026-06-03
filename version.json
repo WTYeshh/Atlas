@@ -1,0 +1,6 @@
+{
+  "version": "1.0.1",
+  "build_number": 2,
+  "release_notes": "Added auto-cleanup for manual events and tasks (60 mins after past/completed), event indicators (red dots), interactive Monthly Grid Calendar view, and automatic current-day focus.",
+  "download_url": "https://github.com/WTYeshh/Atlas/releases"
+}

@@ -113,6 +113,9 @@ class SyncService {
     _ref.read(syncStatusProvider.notifier).updateStatus('syncing', _ref.read(syncStatusProvider).lastSyncedTime);
 
     try {
+      // 0. Perform local storage cleanup (manual past events & completed tasks > 60 mins)
+      await _cleanupExpiredStorage();
+
       final online = await isOnline();
       if (!online) {
         throw const SocketException('Offline');
@@ -299,6 +302,44 @@ class SyncService {
   Future<void> _refreshTasks() async {
     // Triggers local notification reshuffling/updates
     _ref.read(tasksProvider.notifier).loadTasks();
+  }
+
+  Future<void> _cleanupExpiredStorage() async {
+    try {
+      final now = DateTime.now();
+
+      // 1. Clean up past manually created events (> 60 minutes past)
+      final events = await _dbRepo.getEvents();
+      for (var event in events) {
+        if (event.googleEventId == null) { // Skip events synced from Google
+          final eventDateTime = DateTime.tryParse('${event.date}T${event.time}:00');
+          if (eventDateTime != null) {
+            final deleteTime = eventDateTime.add(const Duration(minutes: 60));
+            if (now.isAfter(deleteTime)) {
+              print('SyncService: Auto-deleting manual event past 60 mins: ${event.title}');
+              await _dbRepo.deleteEvent(event.id);
+            }
+          }
+        }
+      }
+
+      // 2. Clean up completed tasks (> 60 minutes past completion)
+      final tasks = await _dbRepo.getTasks();
+      for (var task in tasks) {
+        if (task.status == 'completed') {
+          final updatedAtTime = DateTime.tryParse(task.updatedAt);
+          if (updatedAtTime != null) {
+            final deleteTime = updatedAtTime.add(const Duration(minutes: 60));
+            if (now.isAfter(deleteTime)) {
+              print('SyncService: Auto-deleting completed task past 60 mins: ${task.title}');
+              await _dbRepo.deleteTask(task.id);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('SyncService: Error in auto-cleanup: $e');
+    }
   }
 
   void _reloadProviders() {

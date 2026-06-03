@@ -17,8 +17,8 @@ class UpdateInfo {
 }
 
 class UpdateService {
-  static const String currentVersion = '1.0.1';
-  static const int currentBuildNumber = 2;
+  static const String currentVersion = '1.0.2';
+  static const int currentBuildNumber = 3;
   static const String defaultUpdateCheckUrl = 'https://raw.githubusercontent.com/WTYeshh/Atlas/main/version.json';
 
   final SettingsRepository _settingsRepo = SettingsRepository();

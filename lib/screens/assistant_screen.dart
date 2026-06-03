@@ -231,7 +231,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
             Text(
               msg.message,
               style: TextStyle(
-                color: isMe ? Colors.white : Theme.of(context).colorScheme.onBackground,
+                color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onBackground,
                 fontSize: 14,
                 height: 1.4,
               ),
@@ -242,7 +242,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
               child: Text(
                 timeStr,
                 style: TextStyle(
-                  color: isMe ? Colors.white70 : Theme.of(context).colorScheme.secondary,
+                  color: isMe ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.7) : Theme.of(context).colorScheme.secondary,
                   fontSize: 10,
                 ),
               ),

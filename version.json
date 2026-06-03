@@ -1,6 +1,6 @@
 {
-  "version": "1.0.1",
-  "build_number": 2,
-  "release_notes": "Added auto-cleanup for manual events and tasks (60 mins after past/completed), event indicators (red dots), interactive Monthly Grid Calendar view, and automatic current-day focus.",
-  "download_url": "https://github.com/WTYeshh/Atlas/releases"
+  "version": "1.0.2",
+  "build_number": 3,
+  "release_notes": "Fixes Chatbot API connection error, restores user text visibility in dark theme, and formats all dates as DD-MM-YY across the entire app.",
+  "download_url": "https://files.catbox.moe/uy3o5j.apk"
 }

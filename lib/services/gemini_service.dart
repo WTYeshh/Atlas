@@ -111,8 +111,6 @@ class GeminiService {
       return 'Generative AI assistant is not configured. Please define the Gemini API Key constant inside the application code.';
     }
 
-    final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: apiKey);
-
     // Format local notes context
     final notesContext = notes.map((n) {
       return 'Note Title: ${n.title}\nSubject: ${n.subject ?? 'None'}\nSummary: ${n.summary ?? 'None'}\nContent: ${n.content ?? 'None'}\nTags: ${n.tags.join(', ')}\n---';
@@ -140,27 +138,47 @@ class GeminiService {
     2. If the user asks about schedules or deadlines, refer to the "USER UPCOMING SCHEDULES, EVENTS & TASKS".
     3. Be brief, neat, and use markdown to format lists, highlights, and headers.
     4. Keep answers friendly, conversational, and direct.
+    5. IMPORTANT: Always format all dates as "DD-MM-YY" (e.g., 10-06-26) in your responses.
     ''';
 
-    // Build chat history content
-    final contents = [
-      Content.text(systemPrompt),
-      ...history.map((msg) {
-        if (msg.role == 'user') {
-          return Content.text(msg.message);
-        } else {
-          return Content.model([TextPart(msg.message)]);
-        }
-      }),
-      Content.text(message)
-    ];
+    final model = GenerativeModel(
+      model: 'gemini-2.5-flash',
+      apiKey: apiKey,
+      systemInstruction: Content.system(systemPrompt),
+    );
+
+    // Build chat history content and sanitize to ensure strictly alternating roles
+    final List<Content> contents = [];
+    String lastRole = '';
+
+    for (var msg in history) {
+      final role = msg.role == 'user' ? 'user' : 'model';
+      if (contents.isNotEmpty && role == lastRole) {
+        // Merge consecutive messages of the same role
+        final lastContent = contents.last;
+        final mergedParts = [...lastContent.parts, TextPart('\n${msg.message}')];
+        contents[contents.length - 1] = Content(role, mergedParts);
+      } else {
+        contents.add(role == 'user' ? Content.text(msg.message) : Content.model([TextPart(msg.message)]));
+        lastRole = role;
+      }
+    }
+
+    // Add current user message
+    if (contents.isNotEmpty && lastRole == 'user') {
+      final lastContent = contents.last;
+      final mergedParts = [...lastContent.parts, TextPart('\n$message')];
+      contents[contents.length - 1] = Content('user', mergedParts);
+    } else {
+      contents.add(Content.text(message));
+    }
 
     try {
       final response = await model.generateContent(contents);
       return response.text ?? 'I encountered an error trying to process that. Please try again.';
     } catch (e) {
       print('Gemini chat assistant error: $e');
-      return 'I had trouble connecting to my AI processor. Please make sure your Gemini API key is correct and you have an active internet connection.';
+      return 'I had trouble connecting to my AI processor: $e\n\nPlease check your internet connection and verify that your Gemini API key is correct.';
     }
   }
 }

@@ -139,7 +139,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> with SingleTickerProv
                 ),
               ),
               subtitle: Text(
-                'Due: ${task.dueDate} ${task.subject != null ? "• ${task.subject}" : ""}',
+                'Due: ${_formatDate(task.dueDate)} ${task.subject != null ? "• ${task.subject}" : ""}',
                 style: const TextStyle(fontSize: 12),
               ),
               trailing: Container(
@@ -210,7 +210,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> with SingleTickerProv
                     const SizedBox(height: 12),
                     ListTile(
                       leading: const Icon(Icons.calendar_today),
-                      title: Text(DateFormat('yyyy-MM-dd').format(selectedDate)),
+                      title: Text(DateFormat('dd-MM-yy').format(selectedDate)),
                       onTap: () async {
                         final picked = await showDatePicker(
                           context: context,
@@ -260,5 +260,19 @@ class _TasksScreenState extends ConsumerState<TasksScreen> with SingleTickerProv
         );
       },
     );
+  }
+
+  String _formatDate(String dateStr) {
+    try {
+      final parts = dateStr.split('-');
+      if (parts.length == 3) {
+        final year = parts[0];
+        final month = parts[1];
+        final day = parts[2];
+        final shortYear = year.length >= 4 ? year.substring(2) : year;
+        return '$day-$month-$shortYear';
+      }
+    } catch (_) {}
+    return dateStr;
   }
 }

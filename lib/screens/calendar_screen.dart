@@ -187,7 +187,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   },
                 ),
                 Text(
-                  'Week of ${DateFormat('MMMM d, yyyy').format(mondayOfWeek)}',
+                  'Week of ${DateFormat('dd-MM-yy').format(mondayOfWeek)}',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                 ),
                 IconButton(
@@ -506,7 +506,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     const SizedBox(height: 16),
                     ListTile(
                       leading: const Icon(Icons.calendar_today),
-                      title: Text(DateFormat('yyyy-MM-dd').format(selectedDate)),
+                      title: Text(DateFormat('dd-MM-yy').format(selectedDate)),
                       onTap: () async {
                         final picked = await showDatePicker(
                           context: context,

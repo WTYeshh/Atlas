@@ -86,7 +86,7 @@ class HomeScreen extends ConsumerWidget {
 
   Widget _buildHeader(BuildContext context) {
     final now = DateTime.now();
-    final formattedDate = DateFormat('EEEE, d MMMM').format(now);
+    final formattedDate = DateFormat('EEEE, dd-MM-yy').format(now);
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -225,7 +225,7 @@ class HomeScreen extends ConsumerWidget {
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             subtitle: Text(
-              'Due: ${task.dueDate} ${task.subject != null ? "• ${task.subject}" : ""}',
+              'Due: ${_formatDate(task.dueDate)} ${task.subject != null ? "• ${task.subject}" : ""}',
               style: const TextStyle(fontSize: 12),
             ),
             trailing: Container(
@@ -306,11 +306,25 @@ class HomeScreen extends ConsumerWidget {
               event.title,
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
-            subtitle: Text('${event.date} at ${event.time}'),
+            subtitle: Text('${_formatDate(event.date)} at ${event.time}'),
             trailing: const Icon(Icons.calendar_today, size: 16),
           ),
         );
       }).toList(),
     );
+  }
+
+  String _formatDate(String dateStr) {
+    try {
+      final parts = dateStr.split('-');
+      if (parts.length == 3) {
+        final year = parts[0];
+        final month = parts[1];
+        final day = parts[2];
+        final shortYear = year.length >= 4 ? year.substring(2) : year;
+        return '$day-$month-$shortYear';
+      }
+    } catch (_) {}
+    return dateStr;
   }
 }

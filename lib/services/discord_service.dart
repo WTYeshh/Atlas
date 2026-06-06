@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/config.dart';
 import '../repositories/settings_repository.dart';
 import '../repositories/database_repository.dart';
 import '../repositories/calendar_repository.dart';
@@ -46,12 +47,12 @@ class DiscordService {
       return 0;
     }
 
-    final botToken = await _settingsRepo.getDiscordBotToken();
-    final channelId = await _settingsRepo.getDiscordChannelId();
+    const botToken = AppConfig.discordBotToken;
+    const channelId = AppConfig.discordChannelId;
 
-    if (botToken == null || botToken.trim().isEmpty ||
-        channelId == null || channelId.trim().isEmpty) {
-      throw Exception('Discord credentials are not configured in Settings.');
+    if (botToken == 'YOUR_DISCORD_BOT_TOKEN' || botToken.trim().isEmpty ||
+        channelId == 'YOUR_DISCORD_CHANNEL_ID' || channelId.trim().isEmpty) {
+      throw Exception('Discord credentials are not configured. Please set them in lib/core/config.dart.');
     }
 
     final lastMsgId = await _settingsRepo.getDiscordLastMsgId();

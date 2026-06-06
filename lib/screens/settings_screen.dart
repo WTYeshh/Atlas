@@ -494,63 +494,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             if (isDiscordEnabled) ...[
               const SizedBox(height: 16),
-              TextField(
-                controller: _discordBotTokenController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Discord Bot Token',
-                  hintText: 'Enter Bot Token',
-                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              ElevatedButton.icon(
+                onPressed: _syncingDiscord ? null : _testAndSyncDiscord,
+                icon: _syncingDiscord
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.sync, size: 16, color: Colors.white),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.indigoAccent,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _discordChannelIdController,
-                decoration: const InputDecoration(
-                  labelText: 'Discord Channel ID',
-                  hintText: 'Enter Channel ID',
-                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                label: Center(
+                  child: Text(
+                    _syncingDiscord ? 'Syncing...' : 'Sync Now',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
                 ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _saveDiscordSettings,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).primaryColor,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: Text(
-                        'Save Credentials',
-                        style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton.icon(
-                    onPressed: _syncingDiscord ? null : _testAndSyncDiscord,
-                    icon: _syncingDiscord
-                        ? const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Icon(Icons.sync, size: 16, color: Colors.white),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.indigoAccent,
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    label: Text(
-                      _syncingDiscord ? 'Syncing...' : 'Sync Now',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
               ),
             ],
           ],

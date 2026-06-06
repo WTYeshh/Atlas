@@ -38,12 +38,13 @@ class AssistantNotifier extends StateNotifier<AssistantState> {
   final GeminiService _geminiService = GeminiService();
 
   AssistantNotifier(this._dbRepo, this._ref) : super(AssistantState()) {
-    _loadHistory();
+    _clearHistoryOnStartup();
   }
 
-  Future<void> _loadHistory() async {
-    final history = await _dbRepo.getChatHistory();
-    state = AssistantState(messages: history, isLoading: false);
+  Future<void> _clearHistoryOnStartup() async {
+    // Clear old SQLite history on startup to save device storage
+    await _dbRepo.clearChatHistory();
+    state = AssistantState(messages: [], isLoading: false);
   }
 
   Future<void> sendMessage(String text) async {
@@ -56,12 +57,11 @@ class AssistantNotifier extends StateNotifier<AssistantState> {
       timestamp: DateTime.now().toIso8601String(),
     );
 
-    // 1. Add user message locally
+    // 1. Add user message locally (RAM only)
     state = state.copyWith(
       messages: [...state.messages, userMsg],
       isLoading: true,
     );
-    await _dbRepo.insertChatMessage(userMsg);
 
     // 2. Fetch context for RAG
     final notes = _ref.read(notesProvider);
@@ -82,7 +82,7 @@ class AssistantNotifier extends StateNotifier<AssistantState> {
       message: text,
       notes: notes,
       upcomingEventsAndTasks: scheduleContext,
-      history: state.messages.take(state.messages.length - 1).toList(), // Exclude the current message to avoid repetition if system handles it separately, or include it. Let's include everything up to userMsg.
+      history: state.messages,
     );
 
     final assistantMsg = ChatMessage(
@@ -92,12 +92,11 @@ class AssistantNotifier extends StateNotifier<AssistantState> {
       timestamp: DateTime.now().toIso8601String(),
     );
 
-    // 4. Save and update state
+    // 4. Save and update state (RAM only)
     state = state.copyWith(
       messages: [...state.messages, assistantMsg],
       isLoading: false,
     );
-    await _dbRepo.insertChatMessage(assistantMsg);
   }
 
   Future<void> clearHistory() async {

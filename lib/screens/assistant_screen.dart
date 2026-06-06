@@ -4,6 +4,8 @@ import '../providers/assistant_provider.dart';
 import '../models/chat_message.dart';
 import 'package:intl/intl.dart';
 
+import '../providers/navigation_provider.dart';
+
 class AssistantScreen extends ConsumerStatefulWidget {
   const AssistantScreen({super.key});
 
@@ -11,9 +13,33 @@ class AssistantScreen extends ConsumerStatefulWidget {
   ConsumerState<AssistantScreen> createState() => _AssistantScreenState();
 }
 
-class _AssistantScreenState extends ConsumerState<AssistantScreen> {
+class _AssistantScreenState extends ConsumerState<AssistantScreen> with WidgetsBindingObserver {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    // Explicitly reset the assistant session when destroying the widget
+    ref.read(assistantProvider.notifier).clearHistory();
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      // Clear assistant history when minimized or locked to free resources and tokens
+      ref.read(assistantProvider.notifier).clearHistory();
+    }
+  }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -29,6 +55,13 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Reset chat history when user switches to a different tab
+    ref.listen<int>(navigationIndexProvider, (previous, next) {
+      if (previous == 4 && next != 4) {
+        ref.read(assistantProvider.notifier).clearHistory();
+      }
+    });
+
     final assistantState = ref.watch(assistantProvider);
     final notifier = ref.read(assistantProvider.notifier);
 

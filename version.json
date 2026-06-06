@@ -1,6 +1,6 @@
 {
   "version": "1.0.8",
   "build_number": 9,
-  "release_notes": "Adds Discord schedule imports, fixes Google Calendar deletion sync, adds an individual event delete button, and implements automatic image cache cleanup.",
-  "download_url": "https://files.catbox.moe/14ttgb.apk"
+  "release_notes": "Adds Discord schedule imports, fixes Google Calendar deletion sync, adds an individual event delete button, implements automatic image cache cleanup, and updates credentials.",
+  "download_url": "https://files.catbox.moe/aw5k6n.apk"
 }

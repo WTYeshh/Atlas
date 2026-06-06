@@ -26,7 +26,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -135,6 +135,7 @@ class DatabaseHelper {
         credits REAL NOT NULL,
         grade_point REAL,
         is_completed INTEGER DEFAULT 1,
+        marks REAL,
         FOREIGN KEY (semester_id) REFERENCES semesters (id) ON DELETE CASCADE
       )
     ''');
@@ -209,6 +210,13 @@ class DatabaseHelper {
           FOREIGN KEY (semester_id) REFERENCES semesters (id) ON DELETE CASCADE
         )
       ''');
+    }
+    if (oldVersion < 5) {
+      try {
+        await db.execute('ALTER TABLE semester_courses ADD COLUMN marks REAL');
+      } catch (e) {
+        print('DatabaseHelper: ALTER TABLE semester_courses error (might already exist): $e');
+      }
     }
   }
 

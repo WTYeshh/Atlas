@@ -96,6 +96,7 @@ class AcademicNotifier extends StateNotifier<AcademicState> {
     required String name,
     required double credits,
     double? gradePoint,
+    double? marks,
     bool isCompleted = true,
   }) async {
     final course = CourseModel(
@@ -104,6 +105,7 @@ class AcademicNotifier extends StateNotifier<AcademicState> {
       name: name,
       credits: credits,
       gradePoint: gradePoint,
+      marks: marks,
       isCompleted: isCompleted,
     );
     await _repo.insertCourse(course);
@@ -131,10 +133,11 @@ class AcademicNotifier extends StateNotifier<AcademicState> {
 
     for (var course in courses) {
       if (!includeSimulated && !course.isCompleted) continue;
-      if (course.gradePoint == null) continue;
+      final gp = course.calculatedGradePoint;
+      if (gp == null) continue;
 
       totalCredits += course.credits;
-      weightedPoints += course.credits * course.gradePoint!;
+      weightedPoints += course.credits * gp;
     }
 
     if (totalCredits == 0.0) return 0.0;
@@ -148,10 +151,11 @@ class AcademicNotifier extends StateNotifier<AcademicState> {
     state.courses.forEach((semId, courses) {
       for (var course in courses) {
         if (!includeSimulated && !course.isCompleted) continue;
-        if (course.gradePoint == null) continue;
+        final gp = course.calculatedGradePoint;
+        if (gp == null) continue;
 
         totalCredits += course.credits;
-        weightedPoints += course.credits * course.gradePoint!;
+        weightedPoints += course.credits * gp;
       }
     });
 
@@ -165,7 +169,8 @@ class AcademicNotifier extends StateNotifier<AcademicState> {
     state.courses.forEach((semId, courses) {
       for (var course in courses) {
         if (!includeSimulated && !course.isCompleted) continue;
-        if (course.gradePoint == null) continue;
+        final gp = course.calculatedGradePoint;
+        if (gp == null) continue;
 
         totalCredits += course.credits;
       }

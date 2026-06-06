@@ -92,7 +92,7 @@ class _AcademicTrackerScreenState extends ConsumerState<AcademicTrackerScreen> w
   void _showCourseDialog(String semesterId, {CourseModel? course}) {
     final nameController = TextEditingController(text: course?.name ?? '');
     final creditsController = TextEditingController(text: course?.credits.toString() ?? '4.0');
-    final gradeController = TextEditingController(text: course?.gradePoint?.toString() ?? '');
+    final marksController = TextEditingController(text: course?.marks?.toString() ?? '');
     bool isCompleted = course?.isCompleted ?? true;
 
     showDialog(
@@ -123,10 +123,10 @@ class _AcademicTrackerScreenState extends ConsumerState<AcademicTrackerScreen> w
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: gradeController,
+                  controller: marksController,
                   decoration: const InputDecoration(
-                    labelText: 'Grade Point / GPA (Optional)',
-                    hintText: 'e.g. 9.0, 4.0 (empty if ungraded)',
+                    labelText: 'Total Marks (0-100)',
+                    hintText: 'e.g. 85 (leave empty if ungraded)',
                   ),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 ),
@@ -162,7 +162,7 @@ class _AcademicTrackerScreenState extends ConsumerState<AcademicTrackerScreen> w
               onPressed: () async {
                 final name = nameController.text.trim();
                 final credits = double.tryParse(creditsController.text.trim()) ?? 4.0;
-                final grade = double.tryParse(gradeController.text.trim());
+                final marks = double.tryParse(marksController.text.trim());
                 final notifier = ref.read(academicProvider.notifier);
 
                 if (name.isEmpty) return;
@@ -172,14 +172,15 @@ class _AcademicTrackerScreenState extends ConsumerState<AcademicTrackerScreen> w
                     semesterId: semesterId,
                     name: name,
                     credits: credits,
-                    gradePoint: grade,
+                    marks: marks,
                     isCompleted: isCompleted,
                   );
                 } else {
                   await notifier.updateCourse(course.copyWith(
                     name: name,
                     credits: credits,
-                    gradePoint: grade,
+                    marks: marks,
+                    gradePoint: null, // Reset to force calculatedGP calculation
                     isCompleted: isCompleted,
                   ));
                 }
@@ -511,11 +512,13 @@ class _AcademicTrackerScreenState extends ConsumerState<AcademicTrackerScreen> w
                   ),
                 ),
                 subtitle: Text(
-                  'Credits: ${course.credits}  ${course.isCompleted ? "" : "• [SIMULATED]"}',
+                  course.marks != null
+                      ? 'Credits: ${course.credits}  •  Marks: ${course.marks!.toStringAsFixed(0)} (${course.calculatedGrade})'
+                      : 'Credits: ${course.credits}  ${course.isCompleted ? "" : "• [SIMULATED]"}',
                   style: const TextStyle(fontSize: 12),
                 ),
                 trailing: Text(
-                  course.gradePoint != null ? course.gradePoint!.toStringAsFixed(1) : 'Ungraded',
+                  course.calculatedGradePoint != null ? course.calculatedGradePoint!.toStringAsFixed(1) : 'Ungraded',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -542,7 +545,7 @@ class _AcademicTrackerScreenState extends ConsumerState<AcademicTrackerScreen> w
                     semesterId: semester.id,
                     name: 'Simulated Subject',
                     credits: 4.0,
-                    gradePoint: 8.0,
+                    marks: 85.0,
                     isCompleted: false,
                   )),
                   icon: const Icon(Icons.science_outlined, size: 16, color: Colors.orangeAccent),

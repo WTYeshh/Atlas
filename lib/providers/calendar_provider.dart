@@ -2,9 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/event_model.dart';
 import '../repositories/calendar_repository.dart';
 import '../repositories/database_repository.dart';
-import '../services/notification_service.dart';
 import '../services/sync_service.dart';
-import 'notes_provider.dart';
+import '../services/auto_reminder_service.dart';
+import 'repository_providers.dart';
+
 
 final calendarRepositoryProvider = Provider<CalendarRepository>((ref) {
   final dbRepo = ref.watch(databaseRepositoryProvider);
@@ -21,7 +22,6 @@ class CalendarNotifier extends StateNotifier<List<EventModel>> {
   final DatabaseRepository _dbRepo;
   final CalendarRepository _calendarRepo;
   final Ref _ref;
-  final NotificationService _notificationService = NotificationService();
 
   bool get isSyncing => _ref.watch(syncStatusProvider).status == 'syncing';
 
@@ -37,56 +37,27 @@ class CalendarNotifier extends StateNotifier<List<EventModel>> {
   Future<void> addEvent(EventModel event) async {
     await _calendarRepo.createEvent(event);
     await loadEvents();
-    _scheduleReminder(event);
+    // Reschedule all reminders so this new event gets its notifications
+    await AutoReminderService().rescheduleAll(calendarRepo: _calendarRepo);
   }
 
   Future<void> updateEvent(EventModel event) async {
     await _calendarRepo.updateEvent(event);
     await loadEvents();
-    _scheduleReminder(event);
+    // Reschedule all reminders after change
+    await AutoReminderService().rescheduleAll(calendarRepo: _calendarRepo);
   }
 
   Future<void> deleteEvent(String id, String? googleEventId) async {
-    final eventIndex = state.indexWhere((e) => e.id == id);
-    if (eventIndex != -1) {
-      final event = state[eventIndex];
-      if (event.reminderId != null) {
-        await _notificationService.cancelNotification(event.reminderId!);
-      }
-    }
     await _calendarRepo.deleteEvent(id, googleEventId);
     await loadEvents();
+    // Reschedule all reminders to remove the deleted event's notifications
+    await AutoReminderService().rescheduleAll(calendarRepo: _calendarRepo);
   }
 
   // Trigger Two-Way Sync via SyncService
   Future<void> syncGoogleCalendar() async {
     await _ref.read(syncServiceProvider).syncAll();
   }
-
-  // Schedule notification reminders
-  Future<void> _scheduleReminder(EventModel event) async {
-    try {
-      final eventDateTime = DateTime.tryParse('${event.date}T${event.time}:00');
-      if (eventDateTime != null) {
-        // Remind 15 minutes before the event
-        final reminderTime = eventDateTime.subtract(const Duration(minutes: 15));
-        
-        int reminderId = event.reminderId ?? event.hashCode;
-        
-        await _notificationService.scheduleNotification(
-          id: reminderId,
-          title: 'Upcoming Event Alert',
-          body: '"${event.title}" starts in 15 minutes.',
-          scheduledDate: reminderTime,
-        );
-
-        if (event.reminderId == null) {
-          final updated = event.copyWith(reminderId: reminderId);
-          await _dbRepo.updateEvent(updated);
-        }
-      }
-    } catch (e) {
-      print('Failed to schedule reminder for event ${event.id}: $e');
-    }
-  }
 }
+

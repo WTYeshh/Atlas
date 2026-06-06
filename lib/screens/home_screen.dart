@@ -2,14 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/calendar_provider.dart';
 import '../providers/tasks_provider.dart';
-import '../providers/notes_provider.dart';
 import '../providers/attendance_provider.dart';
 import '../models/event_model.dart';
 import '../models/task_model.dart';
-import '../models/note_model.dart';
 import 'package:intl/intl.dart';
 import 'sync_status_badge.dart';
 import '../services/discord_service.dart';
+import '../services/discord_digest_service.dart';
 import 'attendance_dashboard_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -19,7 +18,6 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final events = ref.watch(calendarProvider);
     final tasks = ref.watch(tasksProvider);
-    final notes = ref.watch(notesProvider);
     final attendanceState = ref.watch(attendanceProvider);
     final attendanceNotifier = ref.read(attendanceProvider.notifier);
 
@@ -40,9 +38,6 @@ class HomeScreen extends ConsumerWidget {
     // Sort tasks by due date
     pendingTasks.sort((a, b) => a.dueDate.compareTo(b.dueDate));
 
-    // Get recent notes (last 3)
-    final recentNotes = notes.take(3).toList();
-
     final overallStats = attendanceNotifier.getOverallStats();
     final double overallPercentage = overallStats['percentage'] ?? 0.0;
     final int pendingConfirmations = attendanceNotifier.getPendingConfirmations().length;
@@ -52,12 +47,12 @@ class HomeScreen extends ConsumerWidget {
         onRefresh: () async {
           await ref.read(calendarProvider.notifier).syncGoogleCalendar();
           await ref.read(tasksProvider.notifier).loadTasks();
-          await ref.read(notesProvider.notifier).loadNotes();
           await ref.read(attendanceProvider.notifier).loadAll();
           try {
             await ref.read(discordServiceProvider).syncDiscord();
+            await ref.read(discordDigestServiceProvider).checkAndTriggerDigests();
           } catch (e) {
-            print('HomeScreen: Discord sync failed during refresh: $e');
+            print('HomeScreen: Discord sync/digest failed during refresh: $e');
           }
         },
         child: SingleChildScrollView(
@@ -88,12 +83,6 @@ class HomeScreen extends ConsumerWidget {
               _buildSectionTitle(context, "Pending Tasks & Assignments"),
               const SizedBox(height: 10),
               _buildPendingTasks(context, pendingTasks, ref),
-              const SizedBox(height: 24),
-
-              // Recent Notes
-              _buildSectionTitle(context, "Recent Notes"),
-              const SizedBox(height: 10),
-              _buildRecentNotes(context, recentNotes),
               const SizedBox(height: 24),
 
               // Upcoming Events
@@ -265,46 +254,6 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildRecentNotes(BuildContext context, List<NoteModel> recentNotes) {
-    if (recentNotes.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Center(
-            child: Text(
-              'Notes Vault is empty.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      children: recentNotes.map((note) {
-        IconData typeIcon = Icons.notes_outlined;
-        if (note.type == 'pdf') typeIcon = Icons.picture_as_pdf_outlined;
-        if (note.type == 'image') typeIcon = Icons.image_outlined;
-
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          child: ListTile(
-            leading: Icon(typeIcon, color: Theme.of(context).primaryColor),
-            title: Text(
-              note.title,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            subtitle: Text(
-              note.subject ?? note.category ?? 'Unorganized',
-              style: const TextStyle(fontSize: 12),
-            ),
-            trailing: const Icon(Icons.chevron_right, size: 20),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
   Widget _buildUpcomingEvents(BuildContext context, List<EventModel> upcomingEvents) {
     if (upcomingEvents.isEmpty) {
       return Card(
@@ -447,7 +396,7 @@ class HomeScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Attendance Overview',
+                       'Attendance Overview',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                     const SizedBox(height: 4),

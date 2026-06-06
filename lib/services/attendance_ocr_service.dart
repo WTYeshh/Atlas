@@ -1,5 +1,6 @@
 import 'dart:convert';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'dart:io';
+import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 import '../core/config.dart';
 import '../models/subject_model.dart';
@@ -7,42 +8,48 @@ import '../models/timetable_slot_model.dart';
 import '../models/event_model.dart';
 import '../repositories/attendance_repository.dart';
 import '../repositories/calendar_repository.dart';
-import 'ocr_service.dart';
+import '../repositories/settings_repository.dart';
 
 class AttendanceOcrService {
-  final OcrService _ocrService = OcrService();
   final AttendanceRepository _attendanceRepo = AttendanceRepository();
   final CalendarRepository _calendarRepo;
+  final SettingsRepository _settingsRepo = SettingsRepository();
 
   AttendanceOcrService(this._calendarRepo);
 
-  /// Processes the image at [imagePath], extracts text, classifies it via Gemini, 
+  /// Processes the image at [imagePath], sends it directly to Gemini Vision API,
   /// and imports the slots (for timetables) or events (for calendars) directly into the database.
   /// Returns a map describing what was imported (e.g., type, count).
   Future<Map<String, dynamic>> parseAndImportImage(String imagePath) async {
-    // 1. Extract raw text from image using OCR
-    final ocrText = await _ocrService.extractTextFromImage(imagePath);
-    if (ocrText == null || ocrText.trim().isEmpty) {
-      throw Exception('Could not extract any text from the uploaded image.');
+    // 1. Read image file as base64
+    final file = File(imagePath);
+    if (!await file.exists()) {
+      throw Exception('Image file not found at $imagePath');
     }
+    final imageBytes = await file.readAsBytes();
+    final base64Image = base64Encode(imageBytes);
 
-    // 2. Load Gemini model
+    // Determine MIME type from extension
+    final ext = imagePath.toLowerCase().split('.').last;
+    String mimeType = 'image/png';
+    if (ext == 'jpg' || ext == 'jpeg') mimeType = 'image/jpeg';
+    if (ext == 'webp') mimeType = 'image/webp';
+
+    // 2. Call Gemini Vision REST API (sends image directly, no local OCR needed)
     const apiKey = AppConfig.geminiApiKey;
     if (apiKey.isEmpty || apiKey == 'YOUR_GEMINI_API_KEY_HERE') {
       throw Exception('Gemini API Key is not configured.');
     }
 
-    final model = GenerativeModel(
-      model: 'gemini-2.5-flash',
-      apiKey: apiKey,
-      generationConfig: GenerationConfig(responseMimeType: 'application/json'),
-    );
+    const model = 'gemini-2.0-flash';
+    final url = Uri.parse(
+        'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey');
 
     // 3. Formulate the prompt
-    final prompt = '''
+    const prompt = '''
     You are an AI timetable and academic calendar parser designed for engineering students.
-    Analyze the following raw text extracted from an image via OCR.
-    Determine if the text represents a "timetable" (weekly class schedule with subject names, times, and days) or a "calendar" (academic semester calendar showing key dates, holidays, exam periods).
+    Analyze the image provided.
+    Determine if the image represents a "timetable" (weekly class schedule with subject names, times, and days) or a "calendar" (academic semester calendar showing key dates, holidays, exam periods).
 
     If it is a "timetable", extract all scheduled classes and format them as a JSON object matching this schema:
     {
@@ -59,9 +66,11 @@ class AttendanceOcrService {
       ]
     }
 
-    If it is a "calendar", extract all holidays, exam periods, and key dates and format them as a JSON object matching this schema:
+    If it is a "calendar", extract all holidays, exam periods, and key dates and format them as a JSON object matching this schema. If you can identify or estimate the overall semester start and end dates from the text, please extract them into the "semesterStartDate" and "semesterEndDate" fields:
     {
       "type": "calendar",
+      "semesterStartDate": "YYYY-MM-DD or null if not found",
+      "semesterEndDate": "YYYY-MM-DD or null if not found",
       "events": [
         {
           "title": "Descriptive event title (e.g., Semester Registration, Midterm Exam Week, Independence Day Holiday)",
@@ -71,20 +80,57 @@ class AttendanceOcrService {
         }
       ]
     }
-
-    Raw OCR Text:
-    """
-    $ocrText
-    """
     ''';
 
     try {
-      final response = await model.generateContent([Content.text(prompt)]);
-      if (response.text == null) {
-        throw Exception('Gemini did not return any classification results.');
+      final httpResponse = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey,
+            },
+            body: jsonEncode({
+              'contents': [
+                {
+                  'role': 'user',
+                  'parts': [
+                    {'text': prompt},
+                    {
+                      'inline_data': {
+                        'mime_type': mimeType,
+                        'data': base64Image,
+                      }
+                    }
+                  ]
+                }
+              ],
+              'generationConfig': {'responseMimeType': 'application/json'},
+            }),
+          )
+          .timeout(const Duration(seconds: 60));
+
+      if (httpResponse.statusCode != 200) {
+        throw Exception('Gemini API error ${httpResponse.statusCode}: ${httpResponse.body}');
       }
 
-      final Map<String, dynamic> result = json.decode(response.text!);
+      final decoded = jsonDecode(httpResponse.body) as Map<String, dynamic>;
+      final candidates = decoded['candidates'] as List?;
+      if (candidates == null || candidates.isEmpty) {
+        throw Exception('Gemini did not return any classification results.');
+      }
+      final parts = candidates[0]['content']?['parts'] as List?;
+      if (parts == null || parts.isEmpty) {
+        throw Exception('Gemini returned empty parts.');
+      }
+      final rawText = parts[0]['text'] as String? ?? '';
+      // Strip markdown code fences if present
+      final cleaned = rawText
+          .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
+          .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
+          .trim();
+
+      final Map<String, dynamic> result = json.decode(cleaned);
       final String type = result['type'] as String? ?? 'unknown';
 
       if (type == 'timetable') {
@@ -141,6 +187,16 @@ class AttendanceOcrService {
         final List<dynamic> eventsJson = result['events'] ?? [];
         int eventsCount = 0;
 
+        final semStart = result['semesterStartDate'] as String?;
+        final semEnd = result['semesterEndDate'] as String?;
+
+        if (semStart != null && semStart.trim().isNotEmpty) {
+          await _settingsRepo.saveSetting('semester_start_date', semStart.trim());
+        }
+        if (semEnd != null && semEnd.trim().isNotEmpty) {
+          await _settingsRepo.saveSetting('semester_end_date', semEnd.trim());
+        }
+
         for (var eventMap in eventsJson) {
           final title = eventMap['title'] as String? ?? 'Academic Event';
           final dateStr = eventMap['date'] as String? ?? DateTime.now().toIso8601String().substring(0, 10);
@@ -172,9 +228,5 @@ class AttendanceOcrService {
       print('AttendanceOcrService parsing failed: $e');
       rethrow;
     }
-  }
-
-  void dispose() {
-    _ocrService.dispose();
   }
 }

@@ -3,19 +3,25 @@ import 'package:uuid/uuid.dart';
 import '../models/subject_model.dart';
 import '../models/timetable_slot_model.dart';
 import '../models/attendance_log_model.dart';
+import '../models/event_model.dart';
 import '../repositories/attendance_repository.dart';
+import '../repositories/settings_repository.dart';
 import '../services/attendance_reminder_service.dart';
 
 class AttendanceState {
   final List<SubjectModel> subjects;
   final List<TimetableSlotModel> slots;
   final List<AttendanceLogModel> logs;
+  final String? semesterStartDate;
+  final String? semesterEndDate;
   final bool isLoading;
 
   AttendanceState({
     this.subjects = const [],
     this.slots = const [],
     this.logs = const [],
+    this.semesterStartDate,
+    this.semesterEndDate,
     this.isLoading = false,
   });
 
@@ -23,12 +29,16 @@ class AttendanceState {
     List<SubjectModel>? subjects,
     List<TimetableSlotModel>? slots,
     List<AttendanceLogModel>? logs,
+    String? semesterStartDate,
+    String? semesterEndDate,
     bool? isLoading,
   }) {
     return AttendanceState(
       subjects: subjects ?? this.subjects,
       slots: slots ?? this.slots,
       logs: logs ?? this.logs,
+      semesterStartDate: semesterStartDate ?? this.semesterStartDate,
+      semesterEndDate: semesterEndDate ?? this.semesterEndDate,
       isLoading: isLoading ?? this.isLoading,
     );
   }
@@ -46,6 +56,7 @@ final attendanceProvider = StateNotifierProvider<AttendanceNotifier, AttendanceS
 class AttendanceNotifier extends StateNotifier<AttendanceState> {
   final AttendanceRepository _repo;
   final AttendanceReminderService _reminderService = AttendanceReminderService();
+  final SettingsRepository _settingsRepo = SettingsRepository();
 
   AttendanceNotifier(this._repo) : super(AttendanceState()) {
     loadAll();
@@ -56,12 +67,148 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
     final subjects = await _repo.getSubjects();
     final slots = await _repo.getTimetableSlots();
     final logs = await _repo.getAttendanceLogs();
+    final semStart = await _settingsRepo.getSetting('semester_start_date');
+    final semEnd = await _settingsRepo.getSetting('semester_end_date');
     state = AttendanceState(
       subjects: subjects,
       slots: slots,
       logs: logs,
+      semesterStartDate: semStart,
+      semesterEndDate: semEnd,
       isLoading: false,
     );
+  }
+
+  Future<void> setSemesterDates(String start, String end) async {
+    await _settingsRepo.saveSetting('semester_start_date', start);
+    await _settingsRepo.saveSetting('semester_end_date', end);
+    await loadAll();
+  }
+
+  Map<String, dynamic> getSubjectProjections(String subjectId, List<EventModel> events) {
+    final startStr = state.semesterStartDate;
+    final endStr = state.semesterEndDate;
+
+    if (startStr == null || endStr == null || startStr.trim().isEmpty || endStr.trim().isEmpty) {
+      return {'available': false};
+    }
+
+    final startDate = DateTime.tryParse(startStr);
+    final endDate = DateTime.tryParse(endStr);
+    if (startDate == null || endDate == null) {
+      return {'available': false};
+    }
+
+    // Filter slots for this subject
+    final subjectSlots = state.slots.where((s) => s.subjectId == subjectId).toList();
+    if (subjectSlots.isEmpty) {
+      return {
+        'available': true,
+        'totalClasses': 0,
+        'futureClasses': 0,
+        'heldSoFar': 0,
+        'attendedSoFar': 0,
+        'projectedMax': 0.0,
+        'projectedMin': 0.0,
+        'statusMessage': 'No classes scheduled in weekly timetable.',
+        'statusColor': 'grey',
+      };
+    }
+
+    // Create a set of holiday/exam dates
+    final holidays = events
+        .where((e) => e.category?.toLowerCase() == 'holiday' || e.category?.toLowerCase() == 'exam' || e.category?.toLowerCase() == 'google sync')
+        .map((e) => e.date)
+        .toSet();
+
+    int totalClasses = 0;
+    int futureClasses = 0;
+
+    final now = DateTime.now();
+    final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    final todayDate = DateTime.tryParse(todayStr) ?? now;
+
+    // Iterate through all days in semester range
+    final daysCount = endDate.difference(startDate).inDays;
+    for (int i = 0; i <= daysCount; i++) {
+      final date = startDate.add(Duration(days: i));
+      final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+
+      // If it is a holiday/exam, skip it
+      if (holidays.contains(dateStr)) continue;
+
+      final weekday = date.weekday; // 1 = Monday, 7 = Sunday
+      final dailySlots = subjectSlots.where((s) => s.dayOfWeek == weekday).length;
+
+      totalClasses += dailySlots;
+
+      if (date.isAfter(todayDate) && dailySlots > 0) {
+        futureClasses += dailySlots;
+      }
+    }
+
+    // Get actual manual logs for this subject
+    final subjectLogs = state.logs.where((l) => l.subjectId == subjectId).toList();
+    final heldSoFar = subjectLogs.where((l) => l.status == 'present' || l.status == 'absent').length;
+    final attendedSoFar = subjectLogs.where((l) => l.status == 'present').length;
+
+    // Projected percentages
+    final totalExpected = heldSoFar + futureClasses;
+    final double projectedMax = totalExpected == 0 ? 0.0 : ((attendedSoFar + futureClasses) / totalExpected) * 100.0;
+    final double projectedMin = totalExpected == 0 ? 0.0 : (attendedSoFar / totalExpected) * 100.0;
+
+    // Target minimum percentage
+    final subject = state.subjects.firstWhere((s) => s.id == subjectId, orElse: () => SubjectModel(id: '', name: '', minPercentage: 75.0));
+    final double minRequired = subject.minPercentage;
+    final double targetRatio = minRequired / 100.0;
+
+    String statusMessage = '';
+    String statusColor = 'green';
+
+    // Calculate actions
+    if (totalExpected == 0) {
+      statusMessage = 'No classes held or scheduled yet.';
+      statusColor = 'grey';
+    } else {
+      // If attending all future classes cannot reach target:
+      if (projectedMax < minRequired) {
+        statusMessage = 'Goal unreachable! Maximum possible attendance is ${projectedMax.toStringAsFixed(1)}%.';
+        statusColor = 'red';
+      } else {
+        // Safe check: how many classes can be missed?
+        // (attendedSoFar + futureClasses - Y) / totalExpected >= targetRatio
+        // attendedSoFar + futureClasses - Y >= targetRatio * totalExpected
+        // Y <= attendedSoFar + futureClasses - targetRatio * totalExpected
+        final double maxMissable = (attendedSoFar + futureClasses) - (targetRatio * totalExpected);
+        final int affordToMiss = maxMissable.floor();
+
+        // Required next classes to reach target (if currently below target ratio on total expected):
+        // (attendedSoFar + X) / (heldSoFar + X) >= targetRatio
+        // X >= (targetRatio * heldSoFar - attendedSoFar) / (1 - targetRatio)
+        final double reqNext = (targetRatio * heldSoFar - attendedSoFar) / (1 - targetRatio);
+        final int needToAttend = reqNext > 0 ? reqNext.ceil() : 0;
+
+        if (needToAttend > 0) {
+          statusMessage = 'Alert: Must attend the next $needToAttend class${needToAttend > 1 ? "es" : ""} to reach ${minRequired.toInt()}%.';
+          statusColor = 'orange';
+        } else {
+          statusMessage = 'Safe: You can afford to miss up to $affordToMiss class${affordToMiss != 1 ? "es" : ""} this semester.';
+          statusColor = 'green';
+        }
+      }
+    }
+
+    return {
+      'available': true,
+      'totalClasses': totalClasses,
+      'futureClasses': futureClasses,
+      'heldSoFar': heldSoFar,
+      'attendedSoFar': attendedSoFar,
+      'projectedMax': projectedMax,
+      'projectedMin': projectedMin,
+      'statusMessage': statusMessage,
+      'statusColor': statusColor,
+    };
   }
 
   // --- Subject Actions ---
@@ -136,11 +283,13 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       await _repo.insertAttendanceLog(newLog);
     }
     await loadAll();
+    await _reminderService.rescheduleAllReminders();
   }
 
   Future<void> removeAttendanceLog(String id) async {
     await _repo.deleteAttendanceLog(id);
     await loadAll();
+    await _reminderService.rescheduleAllReminders();
   }
 
   // --- Helper Getters for Stats ---

@@ -7,13 +7,14 @@ import '../repositories/settings_repository.dart';
 import '../repositories/database_repository.dart';
 import '../repositories/calendar_repository.dart';
 import '../repositories/drive_repository.dart';
-import '../providers/notes_provider.dart';
 import '../providers/calendar_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../providers/attendance_provider.dart';
 import '../services/sync_service.dart';
-import 'share_service.dart';
 import 'attendance_ocr_service.dart';
+import 'message_parser_service.dart';
+import 'auto_reminder_service.dart';
+import '../providers/repository_providers.dart';
 
 final discordServiceProvider = Provider<DiscordService>((ref) {
   final settingsRepo = ref.watch(settingsRepositoryProvider);
@@ -84,9 +85,7 @@ class DiscordService {
       return 0;
     }
 
-    // Initialize ShareService inside the method to use the latest repos
-    final shareService = ShareService(_dbRepo, _calendarRepo, _driveRepo);
-
+    final messageParser = MessageParserService(_dbRepo, _calendarRepo);
     int processedCount = 0;
 
     // Discord returns messages newest first.
@@ -104,16 +103,16 @@ class DiscordService {
 
       bool isProcessedSuccessfully = false;
 
-      // 1. Process attachments if there are any image uploads (e.g. timetable or calendar screenshots)
+      // 1. Process image attachments (e.g. timetable or calendar screenshots)
       if (attachments != null && attachments.isNotEmpty) {
         for (var attachment in attachments) {
-          final url = attachment['url'] as String?;
+          final attachUrl = attachment['url'] as String?;
           final filename = attachment['filename'] as String? ?? 'image.png';
           final contentType = attachment['content_type'] as String? ?? '';
 
-          if (url != null && contentType.startsWith('image/')) {
+          if (attachUrl != null && contentType.startsWith('image/')) {
             print('DiscordService: Found image attachment: $filename');
-            final localPath = await _downloadAttachment(url, filename, botToken);
+            final localPath = await _downloadAttachment(attachUrl, filename, botToken);
             if (localPath != null) {
               try {
                 final ocrService = AttendanceOcrService(_calendarRepo);
@@ -138,14 +137,15 @@ class DiscordService {
         }
       }
 
-      // 2. Process text content if present
+      // 2. Process text messages — parse into tasks/events/reminders
       if (content != null && content.trim().isNotEmpty) {
         print('DiscordService: Processing message text: $content');
         try {
-          await shareService.processText(content);
+          final result = await messageParser.processMessage(content.trim());
+          print('DiscordService: $result');
           isProcessedSuccessfully = true;
         } catch (e) {
-          print('DiscordService: Error processing text $msgId: $e');
+          print('DiscordService: Error processing text message: $e');
         }
       }
 
@@ -158,6 +158,11 @@ class DiscordService {
 
     if (processedCount > 0) {
       _reloadProviders();
+      // Reschedule all reminders after new data arrives
+      AutoReminderService().rescheduleAll(
+        dbRepo: _dbRepo,
+        calendarRepo: _calendarRepo,
+      );
     }
 
     return processedCount;
@@ -189,7 +194,6 @@ class DiscordService {
   void _reloadProviders() {
     _ref.read(calendarProvider.notifier).loadEvents();
     _ref.read(tasksProvider.notifier).loadTasks();
-    _ref.read(notesProvider.notifier).loadNotes();
     _ref.read(attendanceProvider.notifier).loadAll();
   }
 }

@@ -7,6 +7,8 @@ import '../providers/attendance_provider.dart';
 import '../providers/calendar_provider.dart';
 import '../models/subject_model.dart';
 import '../models/timetable_slot_model.dart';
+import '../models/event_model.dart';
+import '../models/attendance_log_model.dart';
 import '../services/attendance_ocr_service.dart';
 
 class AttendanceDashboardScreen extends ConsumerStatefulWidget {
@@ -25,7 +27,7 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -137,6 +139,100 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
         });
       }
     }
+  }
+
+  void _showSemesterDatesDialog() {
+    final attendanceState = ref.read(attendanceProvider);
+    final startController = TextEditingController(text: attendanceState.semesterStartDate ?? '');
+    final endController = TextEditingController(text: attendanceState.semesterEndDate ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Set Semester Dates', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: startController,
+              readOnly: true,
+              decoration: const InputDecoration(
+                labelText: 'Semester Start Date',
+                suffixIcon: Icon(Icons.calendar_today),
+              ),
+              onTap: () async {
+                final initialDate = DateTime.tryParse(startController.text) ?? DateTime.now();
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: initialDate,
+                  firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (picked != null) {
+                  startController.text = DateFormat('yyyy-MM-dd').format(picked);
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: endController,
+              readOnly: true,
+              decoration: const InputDecoration(
+                labelText: 'Semester End Date',
+                suffixIcon: Icon(Icons.calendar_today),
+              ),
+              onTap: () async {
+                final initialDate = DateTime.tryParse(endController.text) ?? DateTime.now().add(const Duration(days: 120));
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: initialDate,
+                  firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (picked != null) {
+                  endController.text = DateFormat('yyyy-MM-dd').format(picked);
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final start = startController.text.trim();
+              final end = endController.text.trim();
+              if (start.isEmpty || end.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please select both start and end dates.')),
+                );
+                return;
+              }
+              Navigator.pop(context);
+              await ref.read(attendanceProvider.notifier).setSemesterDates(start, end);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).primaryColor,
+            ),
+            child: Text('Save', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDisplayDate(String? dateStr) {
+    if (dateStr == null || dateStr.trim().isEmpty) return 'Not configured';
+    try {
+      final parts = dateStr.split('-');
+      if (parts.length == 3) {
+        return '${parts[2]}-${parts[1]}-${parts[0].substring(2)}';
+      }
+    } catch (_) {}
+    return dateStr;
   }
 
   void _showAddSubjectDialog() {
@@ -367,6 +463,200 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
     );
   }
 
+  void _showBunkPlannerSheet(SubjectModel subject, Map<String, dynamic> stats) {
+    final int held = stats['held'] ?? 0;
+    final int attended = stats['attended'] ?? 0;
+    final double target = subject.minPercentage;
+
+    int simulatedP = 0;
+    int simulatedA = 0;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateSheet) {
+          final totalHeld = held + simulatedP + simulatedA;
+          final totalAttended = attended + simulatedP;
+          final double simulatedPercentage = totalHeld == 0 ? 0.0 : (totalAttended / totalHeld) * 100.0;
+          final bool isSimLow = simulatedPercentage < target && totalHeld > 0;
+          final Color simColor = isSimLow ? Colors.redAccent : Colors.green;
+
+          // Consecutive Skippable/Attending Calculations
+          int maxSkip = 0;
+          int minAttend = 0;
+
+          final currentPercentage = held == 0 ? 0.0 : (attended / held) * 100.0;
+          if (currentPercentage >= target) {
+            maxSkip = ((attended * 100) / target).floor() - held;
+            if (maxSkip < 0) maxSkip = 0;
+          } else {
+            minAttend = (((target * held) - (100 * attended)) / (100 - target)).ceil();
+            if (minAttend < 0) minAttend = 0;
+          }
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Bunk Planner & Simulator',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subject.name,
+                  style: const TextStyle(fontSize: 13, color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+
+                // Simulated Percentage Gauge Card
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 20.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Simulated Status', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            const SizedBox(height: 4),
+                            Text(
+                              isSimLow ? 'Low Standing' : 'Good Standing',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: simColor),
+                            ),
+                            const SizedBox(height: 2),
+                            Text('Credits: $totalAttended / $totalHeld classes', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                          ],
+                        ),
+                        Text(
+                          '${simulatedPercentage.toStringAsFixed(1)}%',
+                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 28, color: simColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Controls
+                const Text('Simulate Next Classes:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 10),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
+                        SizedBox(width: 8),
+                        Text('Simulate Attendances', style: TextStyle(fontSize: 13)),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        IconButton(
+                          onPressed: () {
+                            if (simulatedP > 0) {
+                              setStateSheet(() => simulatedP--);
+                            }
+                          },
+                          icon: const Icon(Icons.remove_circle_outlined, size: 22),
+                        ),
+                        Text('$simulatedP', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        IconButton(
+                          onPressed: () => setStateSheet(() => simulatedP++),
+                          icon: const Icon(Icons.add_circle_outlined, size: 22, color: Colors.green),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.cancel_outlined, color: Colors.redAccent, size: 20),
+                        SizedBox(width: 8),
+                        Text('Simulate Bunks (Missed)', style: TextStyle(fontSize: 13)),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        IconButton(
+                          onPressed: () {
+                            if (simulatedA > 0) {
+                              setStateSheet(() => simulatedA--);
+                            }
+                          },
+                          icon: const Icon(Icons.remove_circle_outlined, size: 22),
+                        ),
+                        Text('$simulatedA', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        IconButton(
+                          onPressed: () => setStateSheet(() => simulatedA++),
+                          icon: const Icon(Icons.add_circle_outlined, size: 22, color: Colors.redAccent),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                // Projections Advice Banner
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: simColor.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: simColor.withOpacity(0.15)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'REAL-TIME FORECAST',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: simColor, letterSpacing: 0.5),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        currentPercentage >= target
+                            ? 'Safe to Bunk: You can skip up to $maxSkip class${maxSkip != 1 ? "es" : ""} consecutively before dropping below your ${target.toInt()}% threshold.'
+                            : 'Attendance Alert: You are below your ${target.toInt()}% threshold. You must attend the next $minAttend class${minAttend != 1 ? "es" : ""} consecutively to recover.',
+                        style: const TextStyle(fontSize: 12, height: 1.3),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).primaryColor,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: Text('Close Simulator', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   void _showManualLogSheet(SubjectModel subject) {
     DateTime selectedDate = DateTime.now();
     String status = 'present'; // default
@@ -473,6 +763,7 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
   Widget build(BuildContext context) {
     final attendanceState = ref.watch(attendanceProvider);
     final notifier = ref.read(attendanceProvider.notifier);
+    final events = ref.watch(calendarProvider);
     
     final overallStats = notifier.getOverallStats();
     final double overallPercentage = overallStats['percentage'] ?? 0.0;
@@ -490,6 +781,7 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
           indicatorColor: Theme.of(context).primaryColor,
           tabs: const [
             Tab(text: 'Overview'),
+            Tab(text: 'Mark Attendance'),
             Tab(text: 'Weekly Schedule'),
           ],
         ),
@@ -500,6 +792,8 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                 _pickAndParseImage(true);
               } else if (val == 'calendar') {
                 _pickAndParseImage(false);
+              } else if (val == 'semester_dates') {
+                _showSemesterDatesDialog();
               } else if (val == 'add_subject') {
                 _showAddSubjectDialog();
               } else if (val == 'clear_timetable') {
@@ -538,6 +832,16 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                     Icon(Icons.calendar_today_outlined, size: 20, color: Theme.of(context).primaryColor),
                     const SizedBox(width: 8),
                     const Text('Import Calendar Image'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'semester_dates',
+                child: Row(
+                  children: [
+                    Icon(Icons.date_range_outlined, size: 20, color: Theme.of(context).primaryColor),
+                    const SizedBox(width: 8),
+                    const Text('Set Semester Dates'),
                   ],
                 ),
               ),
@@ -582,36 +886,41 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Semester Period banner
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.calendar_month_outlined, size: 16, color: Theme.of(context).primaryColor),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      attendanceState.semesterStartDate != null && attendanceState.semesterEndDate != null
+                                          ? 'Semester: ${_formatDisplayDate(attendanceState.semesterStartDate)} to ${_formatDisplayDate(attendanceState.semesterEndDate)}'
+                                          : 'Semester dates not configured',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(context).colorScheme.onBackground.withOpacity(0.8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                TextButton(
+                                  onPressed: _showSemesterDatesDialog,
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: const Size(50, 30),
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text('Edit Dates', style: TextStyle(fontSize: 12)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
                             // Overall Progress Banner
                             _buildOverallStatsCard(overallPercentage, overallAttended, overallHeld),
                             const SizedBox(height: 20),
-
-                            // Pending Attendance Log confirmation
-                            if (pendingLogs.isNotEmpty) ...[
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Pending Confirmations (${pendingLogs.length})',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                  ),
-                                  const Icon(Icons.pending_actions, size: 20, color: Colors.orangeAccent),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              SizedBox(
-                                height: 135,
-                                child: ListView.builder(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: pendingLogs.length,
-                                  itemBuilder: (context, index) {
-                                    final item = pendingLogs[index];
-                                    return _buildPendingCard(item);
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                            ],
 
                             // Subjects List Section
                             Row(
@@ -638,7 +947,7 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                                 itemBuilder: (context, index) {
                                   final subject = attendanceState.subjects[index];
                                   final stats = subjectStats[subject.id] ?? {'held': 0, 'attended': 0, 'percentage': 0.0};
-                                  return _buildSubjectCard(subject, stats);
+                                  return _buildSubjectCard(subject, stats, events);
                                 },
                               ),
                           ],
@@ -646,7 +955,12 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                       ),
                     ),
 
-              // 2. Weekly Schedule Tab
+              // 2. Mark Attendance Tab
+              attendanceState.isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _buildMarkAttendanceTab(attendanceState, pendingLogs),
+
+              // 3. Weekly Schedule Tab
               attendanceState.isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : _buildWeeklyScheduleTab(attendanceState.subjects, attendanceState.slots),
@@ -856,12 +1170,15 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
     );
   }
 
-  Widget _buildSubjectCard(SubjectModel subject, Map<String, dynamic> stats) {
+  Widget _buildSubjectCard(SubjectModel subject, Map<String, dynamic> stats, List<dynamic> events) {
     final int held = stats['held'] ?? 0;
     final int attended = stats['attended'] ?? 0;
     final double percentage = stats['percentage'] ?? 0.0;
     final bool isLow = percentage < subject.minPercentage && held > 0;
     final Color barColor = isLow ? Colors.redAccent : Colors.green;
+
+    final projections = ref.read(attendanceProvider.notifier).getSubjectProjections(subject.id, events.cast<EventModel>());
+    final bool hasProj = projections['available'] == true;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -931,6 +1248,60 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                 minHeight: 6,
               ),
             ),
+            if (hasProj) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).dividerColor.withOpacity(0.04),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.08)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Total Classes: ${projections['totalClasses']} (${projections['futureClasses']} remaining)',
+                          style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500),
+                        ),
+                        Text(
+                          'Forecast: ${projections['projectedMin'].toStringAsFixed(1)}% - ${projections['projectedMax'].toStringAsFixed(1)}%',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: projections['statusColor'] == 'red'
+                                ? Colors.redAccent
+                                : projections['statusColor'] == 'orange'
+                                    ? Colors.orangeAccent
+                                    : projections['statusColor'] == 'grey'
+                                        ? Colors.grey
+                                        : Colors.green,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      projections['statusMessage'],
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: projections['statusColor'] == 'red'
+                            ? Colors.redAccent
+                            : projections['statusColor'] == 'orange'
+                                ? Colors.orangeAccent
+                                : projections['statusColor'] == 'grey'
+                                    ? Colors.grey
+                                    : Colors.green,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -950,6 +1321,12 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                   const SizedBox(),
                 Row(
                   children: [
+                    TextButton.icon(
+                      onPressed: () => _showBunkPlannerSheet(subject, stats),
+                      icon: const Icon(Icons.calculate_outlined, size: 14, color: Colors.orangeAccent),
+                      label: const Text('Bunk Planner', style: TextStyle(fontSize: 11, color: Colors.orangeAccent)),
+                    ),
+                    const SizedBox(width: 4),
                     TextButton.icon(
                       onPressed: () => _showManualLogSheet(subject),
                       icon: const Icon(Icons.add, size: 14),
@@ -1007,6 +1384,334 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
     ),
   );
 }
+
+  Widget _buildInlineStatusButtons({
+    required String subjectId,
+    required String date,
+    required String? currentStatus,
+  }) {
+    final notifier = ref.read(attendanceProvider.notifier);
+    
+    Widget buildButton({
+      required String status,
+      required String label,
+      required IconData icon,
+      required Color activeColor,
+    }) {
+      final isActive = currentStatus == status;
+      return Expanded(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+          child: InkWell(
+            onTap: () async {
+              await notifier.markAttendance(
+                subjectId: subjectId,
+                date: date,
+                status: status,
+              );
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              decoration: BoxDecoration(
+                color: isActive ? activeColor : activeColor.withOpacity(0.05),
+                border: Border.all(
+                  color: isActive ? activeColor : activeColor.withOpacity(0.3),
+                  width: 1,
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    icon,
+                    size: 13,
+                    color: isActive ? Colors.white : activeColor,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: isActive ? Colors.white : activeColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+  return Row(
+    children: [
+      buildButton(
+        status: 'present',
+        label: 'Present',
+        icon: Icons.check_circle_outline,
+        activeColor: Colors.green,
+      ),
+      buildButton(
+        status: 'absent',
+        label: 'Absent',
+        icon: Icons.highlight_off,
+        activeColor: Colors.redAccent,
+      ),
+      buildButton(
+        status: 'cancelled',
+        label: 'Cancelled',
+        icon: Icons.cancel_outlined,
+        activeColor: Colors.grey,
+      ),
+    ],
+  );
+}
+
+  Widget _buildMarkAttendanceTab(AttendanceState state, List<Map<String, dynamic>> pendingLogs) {
+    final now = DateTime.now();
+    final todayStr = DateFormat('yyyy-MM-dd').format(now);
+    final todayWeekday = now.weekday;
+
+    final todaySlots = state.slots.where((s) => s.dayOfWeek == todayWeekday).toList();
+    todaySlots.sort((a, b) => a.startTime.compareTo(b.startTime));
+
+    // Group pending logs by date
+    final Map<String, List<Map<String, dynamic>>> groupedPending = {};
+    for (var item in pendingLogs) {
+      final String date = item['date'];
+      groupedPending.putIfAbsent(date, () => []).add(item);
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => ref.read(attendanceProvider.notifier).loadAll(),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Today's Classes Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Today's Classes",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                    Text(
+                      DateFormat('EEEE, d MMMM yyyy').format(now),
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onBackground.withOpacity(0.6)),
+                    ),
+                  ],
+                ),
+                Icon(Icons.today_outlined, color: Theme.of(context).primaryColor),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (todaySlots.isEmpty)
+              _buildEmptyStateCard('No classes scheduled for today in your weekly timetable.')
+            else
+              ...todaySlots.map((slot) {
+                final subject = state.subjects.firstWhere(
+                  (sub) => sub.id == slot.subjectId,
+                  orElse: () => SubjectModel(id: '', name: 'Unknown Subject'),
+                );
+                if (subject.id.isEmpty) return const SizedBox.shrink();
+
+                final log = state.logs.firstWhere(
+                  (l) => l.subjectId == slot.subjectId && l.date == todayStr,
+                  orElse: () => AttendanceLogModel(id: '', subjectId: '', date: '', status: '', updatedAt: ''),
+                );
+                final currentStatus = log.status.isEmpty ? null : log.status;
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (subject.code != null)
+                                    Text(
+                                      subject.code!.toUpperCase(),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context).primaryColor,
+                                      ),
+                                    ),
+                                  Text(
+                                    subject.name,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${slot.startTime} - ${slot.endTime}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (slot.classroom != null) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.room_outlined, size: 12, color: Colors.grey),
+                              const SizedBox(width: 4),
+                              Text(
+                                slot.classroom!,
+                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        _buildInlineStatusButtons(
+                          subjectId: subject.id,
+                          date: todayStr,
+                          currentStatus: currentStatus,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+
+            const SizedBox(height: 24),
+            // Pending Confirmations Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Pending Confirmations",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                    Text(
+                      "Unconfirmed classes from the last 14 days",
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onBackground.withOpacity(0.6)),
+                    ),
+                  ],
+                ),
+                const Icon(Icons.pending_actions, color: Colors.orangeAccent),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (groupedPending.isEmpty)
+              _buildEmptyStateCard('All caught up! No pending attendance logs.')
+            else
+              ...groupedPending.entries.map((entry) {
+                final dateStr = entry.key;
+                final list = entry.value;
+
+                String displayDate = dateStr;
+                try {
+                  final dateObj = DateTime.parse(dateStr);
+                  displayDate = DateFormat('EEEE, d MMMM').format(dateObj);
+                } catch (_) {}
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4.0, top: 12.0, bottom: 8.0),
+                      child: Text(
+                        displayDate,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey),
+                      ),
+                    ),
+                    ...list.map((item) {
+                      final SubjectModel subject = item['subject'];
+                      final TimetableSlotModel slot = item['slot'];
+
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        if (subject.code != null)
+                                          Text(
+                                            subject.code!.toUpperCase(),
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: Theme.of(context).primaryColor,
+                                            ),
+                                          ),
+                                        Text(
+                                          subject.name,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${slot.startTime} - ${slot.endTime}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              _buildInlineStatusButtons(
+                                subjectId: subject.id,
+                                date: dateStr,
+                                currentStatus: null,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ],
+                );
+              }).toList(),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildWeeklyScheduleTab(List<SubjectModel> subjects, List<TimetableSlotModel> slots) {
     final Map<int, List<TimetableSlotModel>> slotsByDay = {};

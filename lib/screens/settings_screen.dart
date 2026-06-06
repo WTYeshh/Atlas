@@ -7,6 +7,8 @@ import '../repositories/auth_repository.dart';
 import '../services/update_service.dart';
 import '../services/sync_service.dart';
 import '../services/discord_service.dart';
+import '../services/discord_digest_service.dart';
+import '../services/notification_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -23,8 +25,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final TextEditingController _discordChannelIdController = TextEditingController();
   
   bool _externalSyncEnabled = true;
-  bool _generativeAiEnabled = true;
   bool _discordSyncEnabled = false;
+  bool _discordDailyDigestEnabled = false;
+  bool _discordWeeklyDigestEnabled = false;
+  bool _sendingTestDigest = false;
   bool _loadingSettings = true;
   bool _loadingGoogleClientId = true;
   bool _checkingUpdates = false;
@@ -46,7 +50,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     final syncEnabled = await _settingsRepo.getExternalSyncEnabled();
-    final aiEnabled = await _settingsRepo.getGenerativeAiEnabled();
     final discordEnabled = await _settingsRepo.getDiscordSyncEnabled();
     
     final clientId = await _settingsRepo.getGoogleClientId();
@@ -66,10 +69,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _discordChannelIdController.text = discordChannel;
     }
 
+    final dailyDigest = await _settingsRepo.getSetting('discord_daily_digest_enabled') == 'true';
+    final weeklyDigest = await _settingsRepo.getSetting('discord_weekly_digest_enabled') == 'true';
+
     setState(() {
       _externalSyncEnabled = syncEnabled;
-      _generativeAiEnabled = aiEnabled;
       _discordSyncEnabled = discordEnabled;
+      _discordDailyDigestEnabled = dailyDigest;
+      _discordWeeklyDigestEnabled = weeklyDigest;
       _loadingSettings = false;
       _loadingGoogleClientId = false;
     });
@@ -100,21 +107,60 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final syncService = ref.read(syncServiceProvider);
       await syncService.syncAll();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google sync disabled. Operating in local mode.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Google sync disabled. Operating in local mode.')),
+        );
+      }
     }
   }
 
-  Future<void> _toggleGenerativeAi(bool value) async {
-    await _settingsRepo.saveGenerativeAiEnabled(value);
+  Future<void> _toggleDailyDigest(bool value) async {
+    await _settingsRepo.saveSetting('discord_daily_digest_enabled', value.toString());
     setState(() {
-      _generativeAiEnabled = value;
+      _discordDailyDigestEnabled = value;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Generative AI features ${value ? 'enabled' : 'disabled'}.')),
-    );
   }
+
+  Future<void> _toggleWeeklyDigest(bool value) async {
+    await _settingsRepo.saveSetting('discord_weekly_digest_enabled', value.toString());
+    setState(() {
+      _discordWeeklyDigestEnabled = value;
+    });
+  }
+
+  Future<void> _sendTestDiscordDigest() async {
+    setState(() {
+      _sendingTestDigest = true;
+    });
+    try {
+      final success = await ref.read(discordDigestServiceProvider).sendDailyDigest(force: true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: success ? Colors.green : Colors.redAccent,
+            content: Text(success 
+                ? 'Test daily digest broadcasted successfully!' 
+                : 'Failed to send test broadcast. Check channel configuration.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sendingTestDigest = false;
+        });
+      }
+    }
+  }
+
+
 
   Future<void> _saveGoogleClientId() async {
     final clientId = _googleClientIdController.text.trim();
@@ -215,16 +261,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _buildAccountCard(context, authState),
                   const SizedBox(height: 24),
 
-                  // Integrations & AI Config
-                  _buildSectionHeader('Integrations & AI Config'),
+                  // Integrations Config
+                  _buildSectionHeader('Integrations Config'),
                   const SizedBox(height: 8),
                   _buildExternalSyncCard(context),
-                  const SizedBox(height: 12),
-                  _buildGeminiConfigCard(context),
                   const SizedBox(height: 12),
                   _buildGoogleClientIdConfigCard(context),
                   const SizedBox(height: 12),
                   _buildDiscordConfigCard(context),
+                  const SizedBox(height: 12),
+                  _buildDiscordDigestsCard(context),
                   const SizedBox(height: 24),
 
                   // Interface customization
@@ -336,7 +382,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Sync calendars, back up academic notes to Google Drive, and access Google integration features.',
+              'Sync calendars with Google Calendar and access Google integration features.',
               style: TextStyle(fontSize: 12, height: 1.4),
             ),
           ],
@@ -345,39 +391,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildGeminiConfigCard(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.auto_awesome, size: 16, color: Colors.indigoAccent),
-                    SizedBox(width: 8),
-                    Text('Generative AI Features', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                Switch(
-                  value: _generativeAiEnabled,
-                  onChanged: _toggleGenerativeAi,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Enable document indexing, smart scheduling classifications, automatic notes summaries, and conversational chat helper functions powered by Gemini AI.',
-              style: TextStyle(fontSize: 12, height: 1.4),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildGoogleClientIdConfigCard(BuildContext context) {
     final bool isSyncEnabled = _externalSyncEnabled;
@@ -485,7 +499,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Import and schedule tasks, events, and notes sent to your Discord bot from a specific channel.',
+              'Import and process timetable screenshots sent to your Discord bot from a specific channel.',
               style: TextStyle(
                 fontSize: 12,
                 height: 1.4,
@@ -543,34 +557,131 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildNotificationConfigCard(BuildContext context) {
-    return const Card(
+    return Card(
       child: Padding(
-        padding: EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            Row(
+            const Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Assignment Deadlines', style: TextStyle(fontSize: 14)),
                 Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
               ],
             ),
-            SizedBox(height: 12),
-            Row(
+            const SizedBox(height: 12),
+            const Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Class Agendas (15m before)', style: TextStyle(fontSize: 14)),
                 Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
               ],
             ),
-            SizedBox(height: 12),
+            const Divider(height: 24),
+            ElevatedButton.icon(
+              onPressed: () async {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Test notification scheduled in 3 seconds...')),
+                );
+                // Trigger local notification in 3 seconds
+                await Future.delayed(const Duration(seconds: 3));
+                final notificationService = NotificationService();
+                await notificationService.scheduleNotification(
+                  id: 99999,
+                  title: 'Test Notification 📱',
+                  body: 'This is a test notification from ATLAS. Your notifications are working perfectly!',
+                  scheduledDate: DateTime.now().add(const Duration(seconds: 1)),
+                );
+              },
+              icon: const Icon(Icons.notifications_active_outlined, size: 16),
+              label: const Text('Send Test Notification'),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(40),
+                backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                foregroundColor: Theme.of(context).primaryColor,
+                elevation: 0,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiscordDigestsCard(BuildContext context) {
+    final bool isDiscordEnabled = _discordSyncEnabled;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('AI Generated Summaries Alerts', style: TextStyle(fontSize: 14)),
-                Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
+                Icon(
+                  Icons.mail_outline,
+                  size: 16,
+                  color: isDiscordEnabled ? Colors.indigoAccent : Colors.grey,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Automated Discord Broadcasts',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isDiscordEnabled ? null : Theme.of(context).disabledColor,
+                  ),
+                ),
               ],
             ),
+            const SizedBox(height: 8),
+            Text(
+              'Receive scheduled updates of your schedule and tasks automatically in your Discord channel.',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: isDiscordEnabled ? null : Theme.of(context).disabledColor,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SwitchListTile(
+              title: const Text('Daily Agenda Digest', style: TextStyle(fontSize: 13)),
+              subtitle: const Text('Sends today\'s schedule at 8:00 AM', style: TextStyle(fontSize: 11)),
+              value: _discordDailyDigestEnabled,
+              onChanged: isDiscordEnabled ? _toggleDailyDigest : null,
+              contentPadding: EdgeInsets.zero,
+            ),
+            SwitchListTile(
+              title: const Text('Weekly Schedule Digest', style: TextStyle(fontSize: 13)),
+              subtitle: const Text('Sends a weekly overview on Sundays', style: TextStyle(fontSize: 11)),
+              value: _discordWeeklyDigestEnabled,
+              onChanged: isDiscordEnabled ? _toggleWeeklyDigest : null,
+              contentPadding: EdgeInsets.zero,
+            ),
+            if (isDiscordEnabled) ...[
+              const Divider(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _sendingTestDigest ? null : _sendTestDiscordDigest,
+                      icon: _sendingTestDigest
+                          ? const SizedBox(
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.indigoAccent),
+                            )
+                          : const Icon(Icons.send_outlined, size: 16),
+                      label: const Text('Send Test Broadcast'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.indigoAccent.withOpacity(0.1),
+                        foregroundColor: Colors.indigoAccent,
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

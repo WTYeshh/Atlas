@@ -90,6 +90,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final events = ref.watch(calendarProvider);
 
     if (_selectedView == 'day') {
+      final now = DateTime.now();
       return Container(
         height: 80,
         padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -97,13 +98,20 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           scrollDirection: Axis.horizontal,
           itemCount: 15,
           itemBuilder: (context, index) {
-            final date = DateTime.now().subtract(const Duration(days: 7)).add(Duration(days: index));
+            final date = now.subtract(const Duration(days: 7)).add(Duration(days: index));
             final isSelected = date.year == _selectedDate.year &&
                 date.month == _selectedDate.month &&
                 date.day == _selectedDate.day;
+            final isToday = date.year == now.year &&
+                date.month == now.month &&
+                date.day == now.day;
 
             final dateStr = DateFormat('yyyy-MM-dd').format(date);
             final hasEvents = events.any((e) => e.date == dateStr);
+
+            final selectedBg = Theme.of(context).colorScheme.primary;
+            final onSelectedFg = Theme.of(context).colorScheme.onPrimary;
+            final todayAccent = Theme.of(context).colorScheme.tertiary;
 
             return GestureDetector(
               onTap: () {
@@ -118,10 +126,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     width: 54,
                     margin: const EdgeInsets.symmetric(horizontal: 6.0),
                     decoration: BoxDecoration(
-                      color: isSelected ? Theme.of(context).primaryColor : Theme.of(context).cardColor,
+                      color: isSelected ? selectedBg : Theme.of(context).cardColor,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: isSelected ? Theme.of(context).primaryColor : Theme.of(context).dividerColor,
+                        color: isSelected
+                            ? selectedBg
+                            : isToday
+                                ? (todayAccent ?? Theme.of(context).colorScheme.primary)
+                                : Theme.of(context).dividerColor,
+                        width: isToday && !isSelected ? 2.0 : 1.0,
                       ),
                     ),
                     child: Column(
@@ -131,7 +144,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           DateFormat('E').format(date).substring(0, 1),
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            color: isSelected ? Colors.white : Theme.of(context).colorScheme.secondary,
+                            color: isSelected
+                                ? onSelectedFg
+                                : isToday
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.secondary,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -140,7 +157,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: isSelected ? Colors.white : Theme.of(context).colorScheme.onBackground,
+                            color: isSelected
+                                ? onSelectedFg
+                                : isToday
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                       ],
@@ -154,7 +175,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         width: 6,
                         height: 6,
                         decoration: BoxDecoration(
-                          color: isSelected ? Colors.white : Colors.redAccent,
+                          color: isSelected ? onSelectedFg : Colors.redAccent,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -208,12 +229,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: List.generate(7, (index) {
                 final date = mondayOfWeek.add(Duration(days: index));
+                final now = DateTime.now();
                 final isSelected = date.year == _selectedDate.year &&
                     date.month == _selectedDate.month &&
                     date.day == _selectedDate.day;
+                final isToday = date.year == now.year &&
+                    date.month == now.month &&
+                    date.day == now.day;
 
                 final dateStr = DateFormat('yyyy-MM-dd').format(date);
                 final hasEvents = events.any((e) => e.date == dateStr);
+
+                final selectedBg = Theme.of(context).colorScheme.primary;
+                final onSelectedFg = Theme.of(context).colorScheme.onPrimary;
 
                 return GestureDetector(
                   onTap: () {
@@ -227,10 +255,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       Container(
                         width: 48,
                         decoration: BoxDecoration(
-                          color: isSelected ? Theme.of(context).primaryColor : Theme.of(context).cardColor,
+                          color: isSelected ? selectedBg : Theme.of(context).cardColor,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: isSelected ? Theme.of(context).primaryColor : Theme.of(context).dividerColor,
+                            color: isSelected
+                                ? selectedBg
+                                : isToday
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).dividerColor,
+                            width: isToday && !isSelected ? 2.0 : 1.0,
                           ),
                         ),
                         child: Column(
@@ -240,7 +273,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                               DateFormat('E').format(date).substring(0, 1),
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: isSelected ? Colors.white : Theme.of(context).colorScheme.secondary,
+                                color: isSelected
+                                    ? onSelectedFg
+                                    : isToday
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Theme.of(context).colorScheme.secondary,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -249,7 +286,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
-                                color: isSelected ? Colors.white : Theme.of(context).colorScheme.onBackground,
+                                color: isSelected
+                                    ? onSelectedFg
+                                    : isToday
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
                           ],
@@ -263,7 +304,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             width: 6,
                             height: 6,
                             decoration: BoxDecoration(
-                              color: isSelected ? Colors.white : Colors.redAccent,
+                              color: isSelected ? onSelectedFg : Colors.redAccent,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -356,6 +397,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               final dateStr = DateFormat('yyyy-MM-dd').format(cellDate);
               final hasEvents = events.any((e) => e.date == dateStr);
 
+              final now = DateTime.now();
+              final isToday = cellDate.year == now.year &&
+                  cellDate.month == now.month &&
+                  cellDate.day == now.day;
+
+              final selectedBg = Theme.of(context).colorScheme.primary;
+              final onSelectedFg = Theme.of(context).colorScheme.onPrimary;
+
               return GestureDetector(
                 onTap: () {
                   setState(() {
@@ -364,11 +413,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 },
                 child: Container(
                   decoration: BoxDecoration(
-                    color: isSelected ? Theme.of(context).primaryColor : Theme.of(context).cardColor,
+                    color: isSelected ? selectedBg : Theme.of(context).cardColor,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: isSelected ? Theme.of(context).primaryColor : Theme.of(context).dividerColor,
-                      width: 0.5,
+                      color: isSelected
+                          ? selectedBg
+                          : isToday
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).dividerColor,
+                      width: isToday && !isSelected ? 1.5 : 0.5,
                     ),
                   ),
                   child: Stack(
@@ -379,7 +432,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
-                          color: isSelected ? Colors.white : Theme.of(context).colorScheme.onBackground,
+                          color: isSelected
+                              ? onSelectedFg
+                              : isToday
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                       if (hasEvents)
@@ -390,7 +447,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             width: 5,
                             height: 5,
                             decoration: BoxDecoration(
-                              color: isSelected ? Colors.white : Colors.redAccent,
+                              color: isSelected ? onSelectedFg : Colors.redAccent,
                               shape: BoxShape.circle,
                             ),
                           ),

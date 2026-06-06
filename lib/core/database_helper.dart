@@ -26,7 +26,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -59,51 +59,6 @@ class DatabaseHelper {
         status TEXT NOT NULL,
         reminder_id INTEGER,
         updated_at TEXT NOT NULL
-      )
-    ''');
-
-    // Notes table
-    await db.execute('''
-      CREATE TABLE notes (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        content TEXT,
-        type TEXT NOT NULL,
-        subject TEXT,
-        category TEXT,
-        summary TEXT,
-        file_path TEXT,
-        drive_file_id TEXT,
-        updated_at TEXT NOT NULL
-      )
-    ''');
-
-    // Tags table (for Notes)
-    await db.execute('''
-      CREATE TABLE tags (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL UNIQUE
-      )
-    ''');
-
-    // Note Tags relation table
-    await db.execute('''
-      CREATE TABLE note_tags (
-        note_id TEXT,
-        tag_id TEXT,
-        PRIMARY KEY (note_id, tag_id),
-        FOREIGN KEY (note_id) REFERENCES notes (id) ON DELETE CASCADE,
-        FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
-      )
-    ''');
-
-    // Chat messages table (for Assistant history)
-    await db.execute('''
-      CREATE TABLE chat_messages (
-        id TEXT PRIMARY KEY,
-        role TEXT NOT NULL,
-        message TEXT NOT NULL,
-        timestamp TEXT NOT NULL
       )
     ''');
 
@@ -161,6 +116,28 @@ class DatabaseHelper {
         FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE
       )
     ''');
+
+    // Semesters table
+    await db.execute('''
+      CREATE TABLE semesters (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        target_gpa REAL
+      )
+    ''');
+
+    // Semester Courses table
+    await db.execute('''
+      CREATE TABLE semester_courses (
+        id TEXT PRIMARY KEY,
+        semester_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        credits REAL NOT NULL,
+        grade_point REAL,
+        is_completed INTEGER DEFAULT 1,
+        FOREIGN KEY (semester_id) REFERENCES semesters (id) ON DELETE CASCADE
+      )
+    ''');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -210,6 +187,26 @@ class DatabaseHelper {
           status TEXT NOT NULL,
           updated_at TEXT NOT NULL,
           FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE
+        )
+      ''');
+    }
+    if (oldVersion < 4) {
+      await db.execute('''
+        CREATE TABLE semesters (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          target_gpa REAL
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE semester_courses (
+          id TEXT PRIMARY KEY,
+          semester_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          credits REAL NOT NULL,
+          grade_point REAL,
+          is_completed INTEGER DEFAULT 1,
+          FOREIGN KEY (semester_id) REFERENCES semesters (id) ON DELETE CASCADE
         )
       ''');
     }

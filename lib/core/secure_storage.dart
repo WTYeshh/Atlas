@@ -2,8 +2,14 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SecureStorage {
   static final SecureStorage _instance = SecureStorage._internal();
+  // Note: encryptedSharedPreferences=false avoids AEADBadTagException on
+  // Android after reinstalls / keystore resets. Standard mode still uses
+  // the Android Keystore and is secure enough for this use-case.
   final FlutterSecureStorage _storage = const FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: false,
+      resetOnError: true,
+    ),
   );
 
   factory SecureStorage() => _instance;

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'calendar_screen.dart';
-import 'notes_screen.dart';
 import 'tasks_screen.dart';
-import 'assistant_screen.dart';
+import 'academic_tracker_screen.dart';
 import 'settings_screen.dart';
 import '../services/update_service.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -22,9 +21,8 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
   final List<Widget> _screens = [
     const HomeScreen(),
     const CalendarScreen(),
-    const NotesScreen(),
     const TasksScreen(),
-    const AssistantScreen(),
+    const AcademicTrackerScreen(),
   ];
 
   @override
@@ -129,10 +127,8 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
               : selectedIndex == 1
                   ? 'Calendar'
                   : selectedIndex == 2
-                      ? 'Notes Vault'
-                      : selectedIndex == 3
-                          ? 'Tasks'
-                          : 'Smart Assistant',
+                      ? 'Tasks'
+                      : 'Academics',
           style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5),
         ),
         actions: [
@@ -159,6 +155,7 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
         ),
         child: BottomNavigationBar(
           currentIndex: selectedIndex,
+          type: BottomNavigationBarType.fixed,
           onTap: (index) {
             ref.read(navigationIndexProvider.notifier).state = index;
           },
@@ -174,19 +171,14 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
               label: 'Calendar',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.folder_open_outlined),
-              activeIcon: Icon(Icons.folder),
-              label: 'Notes',
-            ),
-            BottomNavigationBarItem(
               icon: Icon(Icons.checklist_outlined),
               activeIcon: Icon(Icons.checklist),
               label: 'Tasks',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.chat_bubble_outline),
-              activeIcon: Icon(Icons.chat_bubble),
-              label: 'Assistant',
+              icon: Icon(Icons.school_outlined),
+              activeIcon: Icon(Icons.school),
+              label: 'Academics',
             ),
           ],
         ),

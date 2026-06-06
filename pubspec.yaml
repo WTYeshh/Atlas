@@ -44,17 +44,14 @@ dependencies:
   path: ^1.9.0
   flutter_secure_storage: ^9.0.0
 
-  # AI & OCR
-  google_generative_ai: ^0.4.0
-  google_mlkit_text_recognition: ^0.13.0
+
 
   # Google Authentication & API Integrations
   google_sign_in: ^6.2.1
   googleapis: ^13.1.0
   extension_google_sign_in_as_googleapis_auth: ^2.0.2
 
-  # Share Target Integration
-  receive_sharing_intent: ^1.6.1
+
 
   # Local Notifications & Permissions
   flutter_local_notifications: ^17.0.0

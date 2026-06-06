@@ -5,10 +5,12 @@ import 'screens/auth_screen.dart';
 import 'screens/main_navigation.dart';
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
-import 'services/notification_service.dart';
-import 'services/share_service.dart';
-import 'providers/notes_provider.dart';
 import 'providers/calendar_provider.dart';
+import 'providers/tasks_provider.dart';
+import 'services/notification_service.dart';
+import 'services/auto_reminder_service.dart';
+import 'services/discord_digest_service.dart';
+import 'providers/repository_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,26 +35,28 @@ class AtlasApp extends ConsumerStatefulWidget {
 }
 
 class _AtlasAppState extends ConsumerState<AtlasApp> {
-  ShareService? _shareService;
-
   @override
   void initState() {
     super.initState();
-    // Initialize share service once DB repos are set up via ref
+    // Schedule all auto-reminders after the first frame renders
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final dbRepo = ref.read(databaseRepositoryProvider);
-      final calendarRepo = ref.read(calendarRepositoryProvider);
-      final driveRepo = ref.read(driveRepositoryProvider);
-      
-      _shareService = ShareService(dbRepo, calendarRepo, driveRepo);
-      _shareService!.init();
+      _scheduleAutoReminders();
     });
   }
 
-  @override
-  void dispose() {
-    _shareService?.dispose();
-    super.dispose();
+  Future<void> _scheduleAutoReminders() async {
+    try {
+      final dbRepo = ref.read(databaseRepositoryProvider);
+      final calendarRepo = ref.read(calendarRepositoryProvider);
+      await AutoReminderService().rescheduleAll(
+        dbRepo: dbRepo,
+        calendarRepo: calendarRepo,
+      );
+      // Trigger Discord digest check
+      await ref.read(discordDigestServiceProvider).checkAndTriggerDigests();
+    } catch (e) {
+      print('AtlasApp: Failed to schedule auto-reminders/digests: $e');
+    }
   }
 
   @override
@@ -61,7 +65,7 @@ class _AtlasAppState extends ConsumerState<AtlasApp> {
     final themeMode = ref.watch(themeProvider);
 
     return MaterialApp(
-      title: 'Atlas Assistant',
+      title: 'Atlas',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

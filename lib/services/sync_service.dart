@@ -13,8 +13,9 @@ import '../repositories/auth_repository.dart';
 import '../models/event_model.dart';
 import '../providers/calendar_provider.dart';
 import '../providers/tasks_provider.dart';
-import '../providers/notes_provider.dart';
+
 import '../providers/auth_provider.dart';
+import '../providers/repository_providers.dart';
 
 class SyncStatusState {
   final String status; // 'success', 'failed', 'syncing'
@@ -386,7 +387,6 @@ class SyncService {
   void _reloadProviders() {
     _ref.read(calendarProvider.notifier).loadEvents();
     _ref.read(tasksProvider.notifier).loadTasks();
-    _ref.read(notesProvider.notifier).loadNotes();
     _ref.read(authProvider.notifier).refreshProfile();
   }
 }

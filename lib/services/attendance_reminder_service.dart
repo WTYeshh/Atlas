@@ -1,4 +1,4 @@
-import '../models/timetable_slot_model.dart';
+import '../models/subject_model.dart';
 import '../repositories/attendance_repository.dart';
 import 'notification_service.dart';
 
@@ -8,83 +8,77 @@ class AttendanceReminderService {
 
   static const int reminderBaseId = 2000;
 
-  /// Recalculates and schedules the daily end-of-class reminders based on the current timetable.
+  /// Recalculates and schedules individual reminders for each class slot that hasn't been logged yet.
   Future<void> rescheduleAllReminders() async {
-    // 1. Cancel all existing weekly attendance reminders (IDs 2001-2007)
-    for (int day = 1; day <= 7; day++) {
-      await _notificationService.cancelNotification(reminderBaseId + day);
+    // 1. Cancel all scheduled attendance reminders in our range (2000 to 2200)
+    for (int i = 2000; i < 2200; i++) {
+      await _notificationService.cancelNotification(i);
     }
 
-    // 2. Fetch all timetable slots
+    // 2. Fetch all subjects, slots, and logs
+    final subjects = await _attendanceRepo.getSubjects();
     final slots = await _attendanceRepo.getTimetableSlots();
+    final logs = await _attendanceRepo.getAttendanceLogs();
+
     if (slots.isEmpty) {
-      print('AttendanceReminderService: No timetable slots found. Reminders cleared.');
+      print('AttendanceReminderService: No timetable slots found.');
       return;
     }
 
-    // 3. Group slots by day of the week
-    final Map<int, List<TimetableSlotModel>> slotsByDay = {};
-    for (var slot in slots) {
-      slotsByDay.putIfAbsent(slot.dayOfWeek, () => []).add(slot);
-    }
+    final now = DateTime.now();
+    int scheduledCount = 0;
+    int idCounter = 2000;
 
-    // 4. For each day, schedule a notification at the end of the last class
-    for (int day = 1; day <= 7; day++) {
-      final daySlots = slotsByDay[day];
-      if (daySlots == null || daySlots.isEmpty) {
-        continue;
-      }
+    // 3. Scan the next 7 days (including today)
+    for (int dayOffset = 0; dayOffset <= 7; dayOffset++) {
+      final date = now.add(Duration(days: dayOffset));
+      final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+      final weekday = date.weekday; // 1 = Monday, 7 = Sunday
 
-      // Find the slot with the latest end time
-      TimetableSlotModel latestSlot = daySlots.first;
+      // Get slots scheduled for this weekday
+      final daySlots = slots.where((s) => s.dayOfWeek == weekday).toList();
+
       for (var slot in daySlots) {
-        if (_compareTimeStrings(slot.endTime, latestSlot.endTime) > 0) {
-          latestSlot = slot;
+        // Find subject
+        final subject = subjects.firstWhere(
+          (sub) => sub.id == slot.subjectId,
+          orElse: () => SubjectModel(id: '', name: 'Unknown Subject'),
+        );
+
+        // Check if there is an attendance log for this subject on this date
+        final hasLog = logs.any((l) => l.subjectId == slot.subjectId && l.date == dateStr);
+        if (hasLog) {
+          continue; // Already marked present/absent/cancelled, no reminder needed
+        }
+
+        // Parse slot end time
+        try {
+          final timeParts = slot.endTime.split(':');
+          if (timeParts.length == 2) {
+            final int hour = int.parse(timeParts[0]);
+            final int minute = int.parse(timeParts[1]);
+
+            // Target notification time: 15 minutes after class end time
+            var notificationTime = DateTime(date.year, date.month, date.day, hour, minute).add(const Duration(minutes: 15));
+
+            // Only schedule if it's in the future and we haven't exceeded our notification range limit
+            if (notificationTime.isAfter(now) && idCounter < 2200) {
+              await _notificationService.scheduleNotification(
+                id: idCounter,
+                title: '⏰ Missed marking attendance?',
+                body: 'Did you attend your "${subject.name}" class today? Tap to mark your attendance.',
+                scheduledDate: notificationTime,
+                payload: 'attendance_slot_missed:${slot.id}:$dateStr',
+              );
+              idCounter++;
+              scheduledCount++;
+            }
+          }
+        } catch (e) {
+          print('AttendanceReminderService: Error processing slot ${slot.id}: $e');
         }
       }
-
-      // Parse the latest end time (e.g. "16:30")
-      try {
-        final parts = latestSlot.endTime.split(':');
-        if (parts.length == 2) {
-          final int hour = int.parse(parts[0]);
-          final int minute = int.parse(parts[1]);
-
-          final int reminderId = reminderBaseId + day;
-
-          // Schedule weekly reminder for this day at this end time
-          await _notificationService.scheduleWeeklyNotification(
-            id: reminderId,
-            title: 'Attendance Confirmation',
-            body: 'Your classes for today have ended. Did you attend them? Tap to confirm.',
-            dayOfWeek: day,
-            hour: hour,
-            minute: minute,
-            payload: 'attendance_confirmation_day_$day',
-          );
-          print('AttendanceReminderService: Scheduled reminder ID $reminderId for Day $day at $hour:$minute');
-        }
-      } catch (e) {
-        print('AttendanceReminderService: Error parsing time ${latestSlot.endTime}: $e');
-      }
     }
-  }
-
-  /// Compares two time strings in "HH:MM" format.
-  /// Returns > 0 if timeA is later than timeB, < 0 if timeA is earlier than timeB, 0 if equal.
-  int _compareTimeStrings(String timeA, String timeB) {
-    final aParts = timeA.split(':');
-    final bParts = timeB.split(':');
-    if (aParts.length != 2 || bParts.length != 2) return 0;
-
-    final aHour = int.tryParse(aParts[0]) ?? 0;
-    final aMin = int.tryParse(aParts[1]) ?? 0;
-    final bHour = int.tryParse(bParts[0]) ?? 0;
-    final bMin = int.tryParse(bParts[1]) ?? 0;
-
-    if (aHour != bHour) {
-      return aHour.compareTo(bHour);
-    }
-    return aMin.compareTo(bMin);
+    print('AttendanceReminderService: Scheduled $scheduledCount attendance reminders.');
   }
 }

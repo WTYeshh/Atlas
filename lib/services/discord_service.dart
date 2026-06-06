@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../repositories/settings_repository.dart';
@@ -8,8 +9,10 @@ import '../repositories/drive_repository.dart';
 import '../providers/notes_provider.dart';
 import '../providers/calendar_provider.dart';
 import '../providers/tasks_provider.dart';
+import '../providers/attendance_provider.dart';
 import '../services/sync_service.dart';
 import 'share_service.dart';
+import 'attendance_ocr_service.dart';
 
 final discordServiceProvider = Provider<DiscordService>((ref) {
   final settingsRepo = ref.watch(settingsRepositoryProvider);
@@ -92,22 +95,54 @@ class DiscordService {
       final msgId = msg['id'] as String?;
       final content = msg['content'] as String?;
       final isBot = msg['author']?['bot'] as bool? ?? false;
+      final attachments = msg['attachments'] as List<dynamic>?;
 
-      if (msgId == null || content == null || isBot) {
+      if (msgId == null || isBot) {
         continue;
       }
 
-      if (content.trim().isEmpty) {
-        continue;
+      bool hasImportedAttachment = false;
+
+      // 1. Process attachments if there are any image uploads (e.g. timetable or calendar screenshots)
+      if (attachments != null && attachments.isNotEmpty) {
+        for (var attachment in attachments) {
+          final url = attachment['url'] as String?;
+          final filename = attachment['filename'] as String? ?? 'image.png';
+          final contentType = attachment['content_type'] as String? ?? '';
+
+          if (url != null && contentType.startsWith('image/')) {
+            print('DiscordService: Found image attachment: $filename');
+            final localPath = await _downloadAttachment(url, filename, botToken);
+            if (localPath != null) {
+              try {
+                final ocrService = AttendanceOcrService(_calendarRepo);
+                final importResult = await ocrService.parseAndImportImage(localPath);
+                print('DiscordService: Attachment processed successfully: $importResult');
+                hasImportedAttachment = true;
+                
+                // Delete temp file
+                await File(localPath).delete();
+              } catch (e) {
+                print('DiscordService: Error parsing attachment image: $e');
+              }
+            }
+          }
+        }
       }
 
-      print('DiscordService: Processing message: $content');
-      try {
-        await shareService.processText(content);
+      // 2. Process text content if present
+      if (content != null && content.trim().isNotEmpty) {
+        print('DiscordService: Processing message text: $content');
+        try {
+          await shareService.processText(content);
+          await _settingsRepo.saveDiscordLastMsgId(msgId);
+          processedCount++;
+        } catch (e) {
+          print('DiscordService: Error processing text $msgId: $e');
+        }
+      } else if (hasImportedAttachment) {
         await _settingsRepo.saveDiscordLastMsgId(msgId);
         processedCount++;
-      } catch (e) {
-        print('DiscordService: Error processing message $msgId: $e');
       }
     }
 
@@ -118,9 +153,33 @@ class DiscordService {
     return processedCount;
   }
 
+  Future<String?> _downloadAttachment(String url, String filename, String botToken) async {
+    try {
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Authorization': 'Bot ${botToken.trim()}',
+        },
+      );
+      if (response.statusCode == 200) {
+        final tempDir = Directory.systemTemp;
+        final cleanFilename = filename.replaceAll(RegExp(r'[^\w\.\-]'), '_');
+        final tempFile = File('${tempDir.path}/$cleanFilename');
+        await tempFile.writeAsBytes(response.bodyBytes);
+        return tempFile.path;
+      } else {
+        print('DiscordService: Failed downloading attachment: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('DiscordService: Error downloading attachment: $e');
+    }
+    return null;
+  }
+
   void _reloadProviders() {
     _ref.read(calendarProvider.notifier).loadEvents();
     _ref.read(tasksProvider.notifier).loadTasks();
     _ref.read(notesProvider.notifier).loadNotes();
+    _ref.read(attendanceProvider.notifier).loadAll();
   }
 }

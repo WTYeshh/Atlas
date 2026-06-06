@@ -1,6 +1,6 @@
 {
-  "version": "1.0.6",
-  "build_number": 7,
-  "release_notes": "Adds Attendance Tracker with OCR schedule upload, end-of-day reminders, and one-tap confirmations.",
-  "download_url": "https://files.catbox.moe/yw2p75.apk"
+  "version": "1.0.7",
+  "build_number": 8,
+  "release_notes": "Adds Discord schedule imports: upload timetable or calendar screenshots directly to your Discord channel to auto-sync classes and dates.",
+  "download_url": "https://files.catbox.moe/zadnwc.apk"
 }

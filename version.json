@@ -1,6 +1,6 @@
 {
-  "version": "1.0.8",
-  "build_number": 9,
-  "release_notes": "Adds Discord schedule imports, fixes Google Calendar deletion sync, adds an individual event delete button, implements automatic image cache cleanup, and updates credentials.",
-  "download_url": "https://files.catbox.moe/aw5k6n.apk"
+  "version": "1.0.9",
+  "build_number": 10,
+  "release_notes": "Implements Smart Bunk Planner & Attendance Simulator, CGPA & SGPA Goal Setter with What-If marks-based grade simulation, and Automated Discord Daily/Weekly Agenda digest broadcasts.",
+  "download_url": "https://files.catbox.moe/oj9sog.apk"
 }

@@ -147,6 +147,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final token = _discordBotTokenController.text.trim();
     final channelId = _discordChannelIdController.text.trim();
 
+    // Reset sync cursor if the channel changed to retrieve new channel history
+    final existingChannelId = await _settingsRepo.getDiscordChannelId();
+    if (existingChannelId != channelId) {
+      await _settingsRepo.saveDiscordLastMsgId('');
+    }
+
     await _settingsRepo.saveDiscordBotToken(token);
     await _settingsRepo.saveDiscordChannelId(channelId);
 

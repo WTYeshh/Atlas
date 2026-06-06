@@ -101,7 +101,7 @@ class DiscordService {
         continue;
       }
 
-      bool hasImportedAttachment = false;
+      bool isProcessedSuccessfully = false;
 
       // 1. Process attachments if there are any image uploads (e.g. timetable or calendar screenshots)
       if (attachments != null && attachments.isNotEmpty) {
@@ -118,7 +118,7 @@ class DiscordService {
                 final ocrService = AttendanceOcrService(_calendarRepo);
                 final importResult = await ocrService.parseAndImportImage(localPath);
                 print('DiscordService: Attachment processed successfully: $importResult');
-                hasImportedAttachment = true;
+                isProcessedSuccessfully = true;
                 
                 // Delete temp file
                 await File(localPath).delete();
@@ -135,13 +135,15 @@ class DiscordService {
         print('DiscordService: Processing message text: $content');
         try {
           await shareService.processText(content);
-          await _settingsRepo.saveDiscordLastMsgId(msgId);
-          processedCount++;
+          isProcessedSuccessfully = true;
         } catch (e) {
           print('DiscordService: Error processing text $msgId: $e');
         }
-      } else if (hasImportedAttachment) {
-        await _settingsRepo.saveDiscordLastMsgId(msgId);
+      }
+
+      // Always progress the cursor to avoid double-processing or loop traps
+      await _settingsRepo.saveDiscordLastMsgId(msgId);
+      if (isProcessedSuccessfully) {
         processedCount++;
       }
     }

@@ -252,10 +252,29 @@ class SyncService {
     if (client == null) return;
     final calendarApi = google_cal.CalendarApi(client);
 
-    final googleEvents = await calendarApi.events.list('primary', maxResults: 50);
-    final items = googleEvents.items ?? [];
+    // Fetch all remote Google Calendar events (paginated)
+    final List<google_cal.Event> items = [];
+    String? pageToken;
+    try {
+      do {
+        final googleEvents = await calendarApi.events.list(
+          'primary',
+          maxResults: 250,
+          pageToken: pageToken,
+        );
+        if (googleEvents.items != null) {
+          items.addAll(googleEvents.items!);
+        }
+        pageToken = googleEvents.nextPageToken;
+      } while (pageToken != null);
+    } catch (e) {
+      print('SyncService: Error listing remote Google Calendar events: $e');
+      rethrow;
+    }
+
     final localEvents = await _dbRepo.getEvents();
 
+    // 1. Process/Sync remote updates/inserts to local DB
     for (var item in items) {
       if (item.id == null || item.summary == null) continue;
 
@@ -304,6 +323,19 @@ class SyncService {
           );
           await _dbRepo.updateEvent(updatedEvent);
         }
+      }
+    }
+
+    // 2. Identify and delete local events whose googleEventId is no longer present or is cancelled in the fetched remote events list
+    final activeGoogleIds = items
+        .where((item) => item.id != null && item.status != 'cancelled')
+        .map((item) => item.id!)
+        .toSet();
+
+    for (var localEvent in localEvents) {
+      if (localEvent.googleEventId != null && !activeGoogleIds.contains(localEvent.googleEventId)) {
+        print('SyncService: Auto-deleting local event that was deleted on Google Calendar: ${localEvent.title}');
+        await _dbRepo.deleteEvent(localEvent.id);
       }
     }
   }

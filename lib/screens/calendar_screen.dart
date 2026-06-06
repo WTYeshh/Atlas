@@ -430,39 +430,36 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       itemBuilder: (context, index) {
         final event = dayEvents[index];
 
-        return Dismissible(
-          key: Key(event.id),
-          direction: DismissDirection.endToStart,
-          background: Container(
-            color: Colors.redAccent,
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            child: const Icon(Icons.delete, color: Colors.white),
-          ),
-          onDismissed: (_) {
-            ref.read(calendarProvider.notifier).deleteEvent(event.id, event.googleEventId);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Event "${event.title}" deleted')),
-            );
-          },
-          child: Card(
-            margin: const EdgeInsets.only(bottom: 12.0),
-            child: ListTile(
-              title: Text(event.title, style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Text('${event.time} ${event.description != null ? "• ${event.description}" : ""}'),
-              trailing: event.category != null
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).dividerColor,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        event.category!,
-                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                    )
-                  : null,
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12.0),
+          child: ListTile(
+            title: Text(event.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text('${event.time} ${event.description != null ? "• ${event.description}" : ""}'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (event.category != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).dividerColor,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      event.category!,
+                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                  tooltip: 'Delete Event',
+                  onPressed: () => _confirmDeleteEvent(context, event),
+                  constraints: const BoxConstraints(),
+                  padding: EdgeInsets.zero,
+                ),
+              ],
             ),
           ),
         );
@@ -569,6 +566,40 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               ],
             );
           },
+        );
+      },
+    );
+  }
+
+  void _confirmDeleteEvent(BuildContext context, EventModel event) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete Event'),
+          content: Text('Are you sure you want to delete "${event.title}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                ref.read(calendarProvider.notifier).deleteEvent(event.id, event.googleEventId);
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Event "${event.title}" deleted'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+              child: const Text(
+                'Delete',
+                style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
         );
       },
     );

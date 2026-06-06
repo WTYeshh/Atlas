@@ -1,6 +1,6 @@
 {
-  "version": "1.0.7",
-  "build_number": 8,
-  "release_notes": "Adds Discord schedule imports: upload timetable or calendar screenshots directly to your Discord channel to auto-sync classes and dates.",
-  "download_url": "https://files.catbox.moe/zadnwc.apk"
+  "version": "1.0.8",
+  "build_number": 9,
+  "release_notes": "Adds Discord schedule imports, fixes Google Calendar deletion sync, and adds an individual event delete button in the calendar screen.",
+  "download_url": "https://files.catbox.moe/ik7pwj.apk"
 }

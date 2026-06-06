@@ -119,11 +119,18 @@ class DiscordService {
                 final importResult = await ocrService.parseAndImportImage(localPath);
                 print('DiscordService: Attachment processed successfully: $importResult');
                 isProcessedSuccessfully = true;
-                
-                // Delete temp file
-                await File(localPath).delete();
               } catch (e) {
                 print('DiscordService: Error parsing attachment image: $e');
+              } finally {
+                try {
+                  final file = File(localPath);
+                  if (await file.exists()) {
+                    await file.delete();
+                    print('DiscordService: Cleaned up temp image file at: $localPath');
+                  }
+                } catch (e) {
+                  print('DiscordService: Failed to delete temp file $localPath: $e');
+                }
               }
             }
           }

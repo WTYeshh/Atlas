@@ -121,6 +121,15 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
         );
       }
     } finally {
+      try {
+        final file = File(image.path);
+        if (await file.exists()) {
+          await file.delete();
+          print('Cleaned up image picker cache at: ${image.path}');
+        }
+      } catch (e) {
+        print('Error cleaning up image picker cache: $e');
+      }
       if (mounted) {
         setState(() {
           _isProcessing = false;

@@ -63,7 +63,7 @@ class ShareService {
 
       if (type == SharedMediaType.text) {
         // Text sharing (e.g., from WhatsApp or Telegram)
-        await _processText(path);
+        await processText(path);
       } else if (type == SharedMediaType.image) {
         // Image / screenshot sharing (trigger OCR)
         await _processImageFile(path);
@@ -75,7 +75,7 @@ class ShareService {
   }
 
   // Step 1: Text processing and smart classification
-  Future<void> _processText(String text) async {
+  Future<void> processText(String text) async {
     print('Processing shared text: "$text"');
     
     // Classify using Gemini

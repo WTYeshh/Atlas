@@ -120,6 +120,56 @@ class NotificationService {
     );
   }
 
+  // Schedule weekly notification at specific day and time
+  Future<void> scheduleWeeklyNotification({
+    required int id,
+    required String title,
+    required String body,
+    required int dayOfWeek, // 1 = Monday, 7 = Sunday
+    required int hour,
+    required int minute,
+    String? payload,
+  }) async {
+    if (kIsWeb) {
+      print('Scheduled Weekly Notification: $title - $body on Day $dayOfWeek at $hour:$minute');
+      return;
+    }
+
+    // Calculate next occurrence of the day of the week and time
+    DateTime now = DateTime.now();
+    int daysUntil = (dayOfWeek - now.weekday) % 7;
+    if (daysUntil < 0) daysUntil += 7;
+    
+    DateTime scheduledTime = DateTime(now.year, now.month, now.day, hour, minute).add(Duration(days: daysUntil));
+    if (scheduledTime.isBefore(now)) {
+      scheduledTime = scheduledTime.add(const Duration(days: 7));
+    }
+
+    final tz.TZDateTime tzScheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'atlas_attendance_channel',
+      'Atlas Attendance Reminders',
+      channelDescription: 'Scheduled reminders for marking daily class attendance',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+
+    const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
+
+    await _notificationsPlugin.zonedSchedule(
+      id,
+      title,
+      body,
+      tzScheduledDate,
+      platformDetails,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+      payload: payload,
+    );
+  }
+
   // Cancel notification by ID
   Future<void> cancelNotification(int id) async {
     if (kIsWeb) return;

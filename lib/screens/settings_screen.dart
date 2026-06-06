@@ -6,6 +6,7 @@ import '../repositories/settings_repository.dart';
 import '../repositories/auth_repository.dart';
 import '../services/update_service.dart';
 import '../services/sync_service.dart';
+import '../services/discord_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -18,12 +19,16 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final SettingsRepository _settingsRepo = SettingsRepository();
   final TextEditingController _googleClientIdController = TextEditingController();
+  final TextEditingController _discordBotTokenController = TextEditingController();
+  final TextEditingController _discordChannelIdController = TextEditingController();
   
   bool _externalSyncEnabled = true;
   bool _generativeAiEnabled = true;
+  bool _discordSyncEnabled = false;
   bool _loadingSettings = true;
   bool _loadingGoogleClientId = true;
   bool _checkingUpdates = false;
+  bool _syncingDiscord = false;
 
   @override
   void initState() {
@@ -31,9 +36,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _loadSettings();
   }
 
+  @override
+  void dispose() {
+    _googleClientIdController.dispose();
+    _discordBotTokenController.dispose();
+    _discordChannelIdController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadSettings() async {
     final syncEnabled = await _settingsRepo.getExternalSyncEnabled();
     final aiEnabled = await _settingsRepo.getGenerativeAiEnabled();
+    final discordEnabled = await _settingsRepo.getDiscordSyncEnabled();
     
     final clientId = await _settingsRepo.getGoogleClientId();
     if (clientId != null && clientId.trim().isNotEmpty) {
@@ -42,9 +56,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _googleClientIdController.text = AuthRepository.defaultWebClientId;
     }
 
+    final discordToken = await _settingsRepo.getDiscordBotToken();
+    if (discordToken != null) {
+      _discordBotTokenController.text = discordToken;
+    }
+
+    final discordChannel = await _settingsRepo.getDiscordChannelId();
+    if (discordChannel != null) {
+      _discordChannelIdController.text = discordChannel;
+    }
+
     setState(() {
       _externalSyncEnabled = syncEnabled;
       _generativeAiEnabled = aiEnabled;
+      _discordSyncEnabled = discordEnabled;
       _loadingSettings = false;
       _loadingGoogleClientId = false;
     });
@@ -91,18 +116,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Future<void> _loadGoogleClientId() async {
-    final clientId = await _settingsRepo.getGoogleClientId();
-    if (clientId != null && clientId.trim().isNotEmpty) {
-      _googleClientIdController.text = clientId;
-    } else {
-      _googleClientIdController.text = AuthRepository.defaultWebClientId;
-    }
-    setState(() {
-      _loadingGoogleClientId = false;
-    });
-  }
-
   Future<void> _saveGoogleClientId() async {
     final clientId = _googleClientIdController.text.trim();
     if (clientId.isEmpty || clientId == AuthRepository.defaultWebClientId) {
@@ -115,6 +128,62 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Google Client ID saved successfully.')),
       );
+    }
+  }
+
+  Future<void> _toggleDiscordSync(bool value) async {
+    await _settingsRepo.saveDiscordSyncEnabled(value);
+    setState(() {
+      _discordSyncEnabled = value;
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Discord Integration ${value ? 'enabled' : 'disabled'}.')),
+      );
+    }
+  }
+
+  Future<void> _saveDiscordSettings() async {
+    final token = _discordBotTokenController.text.trim();
+    final channelId = _discordChannelIdController.text.trim();
+
+    await _settingsRepo.saveDiscordBotToken(token);
+    await _settingsRepo.saveDiscordChannelId(channelId);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Discord settings saved successfully.')),
+      );
+    }
+  }
+
+  Future<void> _testAndSyncDiscord() async {
+    setState(() {
+      _syncingDiscord = true;
+    });
+    try {
+      final discordService = ref.read(discordServiceProvider);
+      final count = await discordService.syncDiscord();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sync completed! Processed $count new message(s).')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _syncingDiscord = false;
+        });
+      }
     }
   }
 
@@ -148,6 +217,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _buildGeminiConfigCard(context),
                   const SizedBox(height: 12),
                   _buildGoogleClientIdConfigCard(context),
+                  const SizedBox(height: 12),
+                  _buildDiscordConfigCard(context),
                   const SizedBox(height: 24),
 
                   // Interface customization
@@ -364,6 +435,116 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               const Text(
                 'Enable Google Integration & Sync above to configure this.',
                 style: TextStyle(fontSize: 11, color: Colors.orangeAccent),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiscordConfigCard(BuildContext context) {
+    final bool isDiscordEnabled = _discordSyncEnabled;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.forum_outlined,
+                      size: 16,
+                      color: isDiscordEnabled ? Colors.indigoAccent : Colors.grey,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Discord Integration',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDiscordEnabled ? null : Theme.of(context).disabledColor,
+                      ),
+                    ),
+                  ],
+                ),
+                Switch(
+                  value: _discordSyncEnabled,
+                  onChanged: _toggleDiscordSync,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Import and schedule tasks, events, and notes sent to your Discord bot from a specific channel.',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: isDiscordEnabled ? null : Theme.of(context).disabledColor,
+              ),
+            ),
+            if (isDiscordEnabled) ...[
+              const SizedBox(height: 16),
+              TextField(
+                controller: _discordBotTokenController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Discord Bot Token',
+                  hintText: 'Enter Bot Token',
+                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _discordChannelIdController,
+                decoration: const InputDecoration(
+                  labelText: 'Discord Channel ID',
+                  hintText: 'Enter Channel ID',
+                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _saveDiscordSettings,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: Text(
+                        'Save Credentials',
+                        style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: _syncingDiscord ? null : _testAndSyncDiscord,
+                    icon: _syncingDiscord
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.sync, size: 16, color: Colors.white),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.indigoAccent,
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    label: Text(
+                      _syncingDiscord ? 'Syncing...' : 'Sync Now',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
               ),
             ],
           ],

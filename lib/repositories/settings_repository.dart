@@ -191,4 +191,38 @@ class SettingsRepository {
     final db = await _dbHelper.database;
     await db.delete('sync_queue', where: 'id = ?', whereArgs: [id]);
   }
+
+  // --- Discord Integration Helpers ---
+  Future<void> saveDiscordSyncEnabled(bool enabled) async {
+    await saveSetting('discord_sync_enabled', enabled.toString());
+  }
+
+  Future<bool> getDiscordSyncEnabled() async {
+    final val = await getSetting('discord_sync_enabled');
+    return val == 'true'; // Default is false
+  }
+
+  Future<void> saveDiscordBotToken(String token) async {
+    await saveSetting('discord_bot_token', token);
+  }
+
+  Future<String?> getDiscordBotToken() async {
+    return await getSetting('discord_bot_token');
+  }
+
+  Future<void> saveDiscordChannelId(String channelId) async {
+    await saveSetting('discord_channel_id', channelId);
+  }
+
+  Future<String?> getDiscordChannelId() async {
+    return await getSetting('discord_channel_id');
+  }
+
+  Future<void> saveDiscordLastMsgId(String msgId) async {
+    await saveSetting('discord_last_msg_id', msgId);
+  }
+
+  Future<String?> getDiscordLastMsgId() async {
+    return await getSetting('discord_last_msg_id');
+  }
 }

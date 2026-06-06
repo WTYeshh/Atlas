@@ -1,6 +1,6 @@
 {
-  "version": "1.0.4",
-  "build_number": 5,
-  "release_notes": "Changes app logo to an ultra-minimalist geometric cyan icon, and enables update verification flow.",
-  "download_url": "https://files.catbox.moe/lro7q6.apk"
+  "version": "1.0.6",
+  "build_number": 7,
+  "release_notes": "Adds Attendance Tracker with OCR schedule upload, end-of-day reminders, and one-tap confirmations.",
+  "download_url": "https://files.catbox.moe/yw2p75.apk"
 }

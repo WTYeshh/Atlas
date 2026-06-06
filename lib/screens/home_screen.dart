@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/calendar_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../providers/notes_provider.dart';
+import '../providers/attendance_provider.dart';
 import '../models/event_model.dart';
 import '../models/task_model.dart';
 import '../models/note_model.dart';
 import 'package:intl/intl.dart';
 import 'sync_status_badge.dart';
+import '../services/discord_service.dart';
+import 'attendance_dashboard_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -17,6 +20,8 @@ class HomeScreen extends ConsumerWidget {
     final events = ref.watch(calendarProvider);
     final tasks = ref.watch(tasksProvider);
     final notes = ref.watch(notesProvider);
+    final attendanceState = ref.watch(attendanceProvider);
+    final attendanceNotifier = ref.read(attendanceProvider.notifier);
 
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
@@ -38,12 +43,22 @@ class HomeScreen extends ConsumerWidget {
     // Get recent notes (last 3)
     final recentNotes = notes.take(3).toList();
 
+    final overallStats = attendanceNotifier.getOverallStats();
+    final double overallPercentage = overallStats['percentage'] ?? 0.0;
+    final int pendingConfirmations = attendanceNotifier.getPendingConfirmations().length;
+
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: () async {
           await ref.read(calendarProvider.notifier).syncGoogleCalendar();
           await ref.read(tasksProvider.notifier).loadTasks();
           await ref.read(notesProvider.notifier).loadNotes();
+          await ref.read(attendanceProvider.notifier).loadAll();
+          try {
+            await ref.read(discordServiceProvider).syncDiscord();
+          } catch (e) {
+            print('HomeScreen: Discord sync failed during refresh: $e');
+          }
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -54,6 +69,14 @@ class HomeScreen extends ConsumerWidget {
               // Welcome Banner
               _buildHeader(context),
               const SizedBox(height: 24),
+
+              // Attendance Overview Card
+              _buildAttendanceCard(
+                context,
+                overallPercentage,
+                pendingConfirmations,
+                attendanceState.subjects.length,
+              ),
 
               // Today's Agendas
               _buildSectionTitle(context, "Today's Schedule"),
@@ -326,5 +349,149 @@ class HomeScreen extends ConsumerWidget {
       }
     } catch (_) {}
     return dateStr;
+  }
+
+  Widget _buildAttendanceCard(BuildContext context, double percentage, int pendingCount, int totalSubjects) {
+    final primaryColor = Theme.of(context).primaryColor;
+
+    if (totalSubjects == 0) {
+      return Card(
+        margin: const EdgeInsets.only(bottom: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 2,
+        child: InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const AttendanceDashboardScreen()),
+            );
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.calendar_view_week,
+                    color: primaryColor,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Setup Attendance Tracking',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Upload your timetable to automatically track your attendance.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final isLow = percentage < 75.0;
+    final alertColor = isLow ? Colors.redAccent : Colors.green;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 3,
+      shadowColor: alertColor.withOpacity(0.15),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const AttendanceDashboardScreen()),
+          );
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: alertColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isLow ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+                  color: alertColor,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Attendance Overview',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      pendingCount > 0
+                          ? '$pendingCount classes pending confirmation'
+                          : 'All attendance logs up-to-date',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: pendingCount > 0 ? Colors.orangeAccent : Colors.grey,
+                        fontWeight: pendingCount > 0 ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${percentage.toStringAsFixed(1)}%',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
+                      color: alertColor,
+                    ),
+                  ),
+                  Text(
+                    isLow ? 'Low Standing' : 'Good Standing',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: alertColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

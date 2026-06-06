@@ -26,7 +26,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -126,6 +126,41 @@ class DatabaseHelper {
         created_at TEXT NOT NULL
       )
     ''');
+
+    // Subjects table
+    await db.execute('''
+      CREATE TABLE subjects (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        code TEXT,
+        min_percentage REAL DEFAULT 75.0
+      )
+    ''');
+
+    // Timetable Slots table
+    await db.execute('''
+      CREATE TABLE timetable_slots (
+        id TEXT PRIMARY KEY,
+        subject_id TEXT NOT NULL,
+        day_of_week INTEGER NOT NULL,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        classroom TEXT,
+        FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE
+      )
+    ''');
+
+    // Attendance logs table
+    await db.execute('''
+      CREATE TABLE attendance_logs (
+        id TEXT PRIMARY KEY,
+        subject_id TEXT NOT NULL,
+        date TEXT NOT NULL,
+        status TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE
+      )
+    ''');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -144,6 +179,37 @@ class DatabaseHelper {
           action TEXT NOT NULL,
           payload TEXT,
           created_at TEXT NOT NULL
+        )
+      ''');
+    }
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE subjects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          code TEXT,
+          min_percentage REAL DEFAULT 75.0
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE timetable_slots (
+          id TEXT PRIMARY KEY,
+          subject_id TEXT NOT NULL,
+          day_of_week INTEGER NOT NULL,
+          start_time TEXT NOT NULL,
+          end_time TEXT NOT NULL,
+          classroom TEXT,
+          FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE attendance_logs (
+          id TEXT PRIMARY KEY,
+          subject_id TEXT NOT NULL,
+          date TEXT NOT NULL,
+          status TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE
         )
       ''');
     }

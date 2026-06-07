@@ -41,7 +41,7 @@ class _AcademyGuildScreenState extends ConsumerState<AcademyGuildScreen>
     final notifier = ref.read(scholarProvider.notifier);
     final state = ref.read(scholarProvider);
 
-    if (state.coins < 50) {
+    if (state.coins < 100) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Not enough Atlas Coins! Complete tasks to earn more. 🪙'),
@@ -236,31 +236,25 @@ class _AcademyGuildScreenState extends ConsumerState<AcademyGuildScreen>
                     Row(
                       children: [
                         // Level Circular Indicator
-                        GestureDetector(
-                          onTap: () {
-                            // Secret debug grant (adds 100 coins, 150 XP) on tapping level badge
-                            scholarNotifier.debugGrant(100, 150);
-                          },
-                          child: Container(
-                            width: 60,
-                            height: 60,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Theme.of(context).primaryColor,
-                                width: 2,
-                              ),
-                              color: Theme.of(context).primaryColor.withOpacity(0.05),
+                        Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Theme.of(context).primaryColor,
+                              width: 2,
                             ),
-                            child: Center(
-                              child: Text(
-                                'Lvl\n${scholarState.level}',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.outfit(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).primaryColor,
-                                ),
+                            color: Theme.of(context).primaryColor.withOpacity(0.05),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Lvl\n${scholarState.level}',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).primaryColor,
                               ),
                             ),
                           ),
@@ -417,7 +411,7 @@ class _AcademyGuildScreenState extends ConsumerState<AcademyGuildScreen>
                       ElevatedButton.icon(
                         onPressed: _isSpinning ? null : _triggerGachaSpin,
                         icon: const Icon(Icons.circle_outlined, size: 16),
-                        label: const Text('ROLL GACHA (50 COINS)'),
+                        label: const Text('ROLL GACHA (100 COINS)'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Theme.of(context).primaryColor,
                           foregroundColor: Theme.of(context).colorScheme.brightness == Brightness.dark

@@ -99,13 +99,13 @@ class ScholarNotifier extends StateNotifier<ScholarState> {
 
   Future<Map<String, dynamic>> completeTask(String priority) async {
     int xpReward = 15;
-    int coinReward = 10;
+    int coinReward = 5;
     if (priority == 'high') {
       xpReward = 50;
-      coinReward = 30;
+      coinReward = 15;
     } else if (priority == 'medium') {
       xpReward = 30;
-      coinReward = 20;
+      coinReward = 10;
     }
 
     int newXp = state.xp + xpReward;
@@ -117,7 +117,7 @@ class ScholarNotifier extends StateNotifier<ScholarState> {
       newXp -= (newLevel * 150);
       newLevel += 1;
       leveledUp = true;
-      newCoins += newLevel * 50;
+      newCoins += newLevel * 10; // Level Up bonus (10 * level)
     }
 
     state = state.copyWith(
@@ -150,9 +150,9 @@ class ScholarNotifier extends StateNotifier<ScholarState> {
   }
 
   Future<Map<String, dynamic>?> rollGacha() async {
-    if (state.coins < 50) return null;
+    if (state.coins < 100) return null;
 
-    final newCoins = state.coins - 50;
+    final newCoins = state.coins - 100;
     state = state.copyWith(coins: newCoins);
     await _settingsRepo.saveSetting('academic_coins', newCoins.toString());
 
@@ -182,7 +182,7 @@ class ScholarNotifier extends StateNotifier<ScholarState> {
     final isDuplicate = state.unlockedThemes.contains(themeKey);
 
     if (isDuplicate) {
-      final refundCoins = state.coins + 30;
+      final refundCoins = state.coins + 40;
       state = state.copyWith(coins: refundCoins);
       await _settingsRepo.saveSetting('academic_coins', refundCoins.toString());
     } else {
@@ -203,35 +203,7 @@ class ScholarNotifier extends StateNotifier<ScholarState> {
       'themeName': themeName,
       'rarity': rarity,
       'isDuplicate': isDuplicate,
-      'refund': isDuplicate ? 30 : 0,
+      'refund': isDuplicate ? 40 : 0,
     };
-  }
-
-  Future<void> debugGrant(int coins, int xp) async {
-    int newXp = state.xp + xp;
-    int newLevel = state.level;
-    int newCoins = state.coins + coins;
-    bool leveledUp = false;
-
-    while (newXp >= (newLevel * 150)) {
-      newXp -= (newLevel * 150);
-      newLevel += 1;
-      leveledUp = true;
-    }
-
-    state = state.copyWith(
-      xp: newXp,
-      level: newLevel,
-      coins: newCoins,
-    );
-
-    await _settingsRepo.saveSetting('academic_xp', newXp.toString());
-    await _settingsRepo.saveSetting('academic_level', newLevel.toString());
-    await _settingsRepo.saveSetting('academic_coins', newCoins.toString());
-
-    if (leveledUp) {
-      final titleName = getScholarTitle(newLevel);
-      _discordDigest.sendLevelUpPost(newLevel, titleName);
-    }
   }
 }

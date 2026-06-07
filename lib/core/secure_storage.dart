@@ -25,6 +25,36 @@ class SecureStorage {
   static const String _userName = 'user_name';
   static const String _userPhotoUrl = 'user_photo_url';
   static const String _updateCheckUrl = 'update_check_url';
+  static const String _lastGreetingDate = 'last_greeting_date';
+  static const String _lastMorningGreetingDate = 'last_morning_greeting_date';
+  static const String _lastNightGreetingDate = 'last_night_greeting_date';
+
+  // Last Greeting Date
+  Future<void> saveLastGreetingDate(String date) async {
+    await _storage.write(key: _lastGreetingDate, value: date);
+  }
+
+  Future<String?> getLastGreetingDate() async {
+    return await _storage.read(key: _lastGreetingDate);
+  }
+
+  // Last Morning Greeting Date
+  Future<void> saveLastMorningGreetingDate(String date) async {
+    await _storage.write(key: _lastMorningGreetingDate, value: date);
+  }
+
+  Future<String?> getLastMorningGreetingDate() async {
+    return await _storage.read(key: _lastMorningGreetingDate);
+  }
+
+  // Last Night Greeting Date
+  Future<void> saveLastNightGreetingDate(String date) async {
+    await _storage.write(key: _lastNightGreetingDate, value: date);
+  }
+
+  Future<String?> getLastNightGreetingDate() async {
+    return await _storage.read(key: _lastNightGreetingDate);
+  }
 
   // Gemini API Key
   Future<void> saveGeminiApiKey(String key) async {

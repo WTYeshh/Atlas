@@ -9,6 +9,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/navigation_provider.dart';
+import 'package:intl/intl.dart';
+import '../core/secure_storage.dart';
+import 'daily_greeting_dialog.dart';
+import '../services/notification_service.dart';
 
 class MainNavigation extends ConsumerStatefulWidget {
   const MainNavigation({super.key});
@@ -28,9 +32,62 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
   @override
   void initState() {
     super.initState();
+    // Register notification tap callback to show greeting popup when tapped
+    NotificationService().onNotificationTap = (payload) {
+      if (payload != null && payload.startsWith('greeting:')) {
+        final modeStr = payload.split(':')[1];
+        final mode = modeStr == 'morning' ? GreetingMode.morning : GreetingMode.night;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            DailyGreetingDialog.show(context, autoTriggered: false, forceMode: mode);
+          }
+        });
+      }
+    };
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkForUpdatesAutomatic();
+      _checkAndShowDailyGreeting();
     });
+  }
+
+  Future<void> _checkAndShowDailyGreeting() async {
+    // Check if the app was launched by tapping a daily greeting notification
+    final initialPayload = NotificationService().initialPayload;
+    if (initialPayload != null) {
+      NotificationService().initialPayload = null; // Clear it
+      if (initialPayload.startsWith('greeting:')) {
+        final modeStr = initialPayload.split(':')[1];
+        final mode = modeStr == 'morning' ? GreetingMode.morning : GreetingMode.night;
+        DailyGreetingDialog.show(context, autoTriggered: false, forceMode: mode);
+        return; // Skip normal automatic trigger since user explicitly opened a slot
+      }
+    }
+
+    final todayStr = DateFormat('dd-MM-yy').format(DateTime.now());
+    final hour = DateTime.now().hour;
+
+    if (hour < 17) {
+      // Morning Mode
+      final lastMorning = await SecureStorage().getLastMorningGreetingDate();
+      if (lastMorning != todayStr && mounted) {
+        DailyGreetingDialog.show(
+          context,
+          autoTriggered: true,
+          forceMode: GreetingMode.morning,
+        );
+      }
+    } else {
+      // Night Mode
+      final lastNight = await SecureStorage().getLastNightGreetingDate();
+      if (lastNight != todayStr && mounted) {
+        DailyGreetingDialog.show(
+          context,
+          autoTriggered: true,
+          forceMode: GreetingMode.night,
+        );
+      }
+    }
   }
 
   Future<void> _checkForUpdatesAutomatic() async {
@@ -132,6 +189,46 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
           style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5),
         ),
         actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.emoji_emotions_outlined),
+            tooltip: "Test Greeting",
+            onSelected: (value) {
+              if (value == 'morning') {
+                DailyGreetingDialog.show(
+                  context,
+                  autoTriggered: false,
+                  forceMode: GreetingMode.morning,
+                );
+              } else if (value == 'night_pending') {
+                DailyGreetingDialog.show(
+                  context,
+                  autoTriggered: false,
+                  forceMode: GreetingMode.night,
+                );
+              } else if (value == 'night_completed') {
+                DailyGreetingDialog.show(
+                  context,
+                  autoTriggered: false,
+                  forceMode: GreetingMode.night,
+                  mockAllCompleted: true,
+                );
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'morning',
+                child: Text('Morning Mode Preview'),
+              ),
+              const PopupMenuItem(
+                value: 'night_pending',
+                child: Text('Night Mode Preview (Pending)'),
+              ),
+              const PopupMenuItem(
+                value: 'night_completed',
+                child: Text('Night Mode Preview (All Completed)'),
+              ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             onPressed: () {

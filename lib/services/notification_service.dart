@@ -7,6 +7,10 @@ class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
 
+  // Tap handler callbacks
+  void Function(String?)? onNotificationTap;
+  String? initialPayload;
+
   factory NotificationService() => _instance;
 
   NotificationService._internal();
@@ -32,10 +36,22 @@ class NotificationService {
     await _notificationsPlugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // Handle notification click: redirect user or open screen
         print('Notification clicked: ${response.payload}');
+        if (onNotificationTap != null) {
+          onNotificationTap!(response.payload);
+        }
       },
     );
+
+    // 4. Check if the app was launched by tapping a notification
+    final NotificationAppLaunchDetails? launchDetails =
+        await _notificationsPlugin.getNotificationAppLaunchDetails();
+    if (launchDetails != null && launchDetails.didNotificationLaunchApp) {
+      initialPayload = launchDetails.notificationResponse?.payload;
+    }
+
+    // 5. Schedule repeating morning and night alerts
+    await scheduleDailyGreetings();
   }
 
   Future<void> requestPermissions() async {
@@ -167,6 +183,77 @@ class NotificationService {
       uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
       payload: payload,
+    );
+  }
+
+  // Schedule daily repeating notification
+  Future<void> scheduleDailyNotification({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    String? payload,
+  }) async {
+    if (kIsWeb) {
+      print('Scheduled Daily Notification: $title - $body at $hour:$minute');
+      return;
+    }
+
+    final now = DateTime.now();
+    var scheduledTime = DateTime(now.year, now.month, now.day, hour, minute);
+    if (scheduledTime.isBefore(now)) {
+      scheduledTime = scheduledTime.add(const Duration(days: 1));
+    }
+
+    final tz.TZDateTime tzScheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'atlas_daily_greeting_channel',
+      'Atlas Daily Greetings',
+      channelDescription: 'Scheduled reminders for morning tasks and night reviews',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+
+    const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
+
+    try {
+      await _notificationsPlugin.zonedSchedule(
+        id,
+        title,
+        body,
+        tzScheduledDate,
+        platformDetails,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time,
+        payload: payload,
+      );
+    } catch (e) {
+      print('NotificationService: Error scheduling daily reminder: $e');
+    }
+  }
+
+  Future<void> scheduleDailyGreetings() async {
+    // 8:00 AM Morning Greeting
+    await scheduleDailyNotification(
+      id: 60000,
+      title: '☀️ Good Morning YESH!',
+      body: "Here are your tasks and events for today. Tap to check them out!",
+      hour: 8,
+      minute: 0,
+      payload: 'greeting:morning',
+    );
+    
+    // 9:00 PM Night Greeting
+    await scheduleDailyNotification(
+      id: 60001,
+      title: '🌙 Good Night YESH!',
+      body: "Let's review what was completed today and reschedule pending tasks.",
+      hour: 21,
+      minute: 0,
+      payload: 'greeting:night',
     );
   }
 

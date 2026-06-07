@@ -175,21 +175,57 @@ class ScholarNotifier extends StateNotifier<ScholarState> {
     String themeName;
     String rarity;
 
-    if (rand < 0.07) {
+    // Legendary 7%: amoled_gold 3.5% | galaxy_purple 3.5%
+    // Epic      18%: neon_cyberpunk 6% | midnight_indigo 6% | steel_noir 6%
+    // Rare      37%: warm_sepia ~9% | lava_red ~9% | arctic_ice ~9% | sage_minimal ~10%
+    // Common    38%: forest_green ~13% | ocean_blue ~13% | cherry_blossom ~12%
+    if (rand < 0.035) {
       themeKey = 'amoled_gold';
       themeName = 'AMOLED Gold 🏆';
       rarity = 'Legendary';
-    } else if (rand < 0.25) {
+    } else if (rand < 0.07) {
+      themeKey = 'galaxy_purple';
+      themeName = 'Galaxy Purple 🔮';
+      rarity = 'Legendary';
+    } else if (rand < 0.13) {
       themeKey = 'neon_cyberpunk';
       themeName = 'Neon Cyberpunk 👾';
       rarity = 'Epic';
-    } else if (rand < 0.55) {
+    } else if (rand < 0.19) {
+      themeKey = 'midnight_indigo';
+      themeName = 'Midnight Indigo 🌙';
+      rarity = 'Epic';
+    } else if (rand < 0.25) {
+      themeKey = 'steel_noir';
+      themeName = 'Steel Noir ⬛';
+      rarity = 'Epic';
+    } else if (rand < 0.34) {
       themeKey = 'warm_sepia';
       themeName = 'Warm Sepia ☕';
       rarity = 'Rare';
-    } else {
+    } else if (rand < 0.43) {
+      themeKey = 'lava_red';
+      themeName = 'Lava Red 🔥';
+      rarity = 'Rare';
+    } else if (rand < 0.52) {
+      themeKey = 'arctic_ice';
+      themeName = 'Arctic Ice 🧊';
+      rarity = 'Rare';
+    } else if (rand < 0.625) {
+      themeKey = 'sage_minimal';
+      themeName = 'Sage Minimal 🌿';
+      rarity = 'Rare';
+    } else if (rand < 0.75) {
       themeKey = 'forest_green';
       themeName = 'Forest Green 🌲';
+      rarity = 'Common';
+    } else if (rand < 0.875) {
+      themeKey = 'ocean_blue';
+      themeName = 'Ocean Blue 🌊';
+      rarity = 'Common';
+    } else {
+      themeKey = 'cherry_blossom';
+      themeName = 'Cherry Blossom 🌸';
       rarity = 'Common';
     }
 

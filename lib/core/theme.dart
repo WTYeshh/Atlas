@@ -221,6 +221,87 @@ class AppTheme {
         textSecondary = const Color(0xFFE5E5EA);
         brightness = Brightness.dark;
         break;
+      // --- NEW THEMES ---
+      case 'ocean_blue':
+        scaffoldBg = const Color(0xFF040E1A); // Deep ocean midnight
+        primaryColor = const Color(0xFF0A84FF); // iOS blue
+        accentColor = const Color(0xFF0B1C2E);
+        borderColor = const Color(0xFF112840);
+        cardBg = const Color(0xFF071526);
+        textPrimary = const Color(0xFFE5F0FF);
+        textSecondary = const Color(0xFF6B9FCC);
+        brightness = Brightness.dark;
+        break;
+      case 'cherry_blossom':
+        scaffoldBg = const Color(0xFFFFF5F7); // Petal white
+        primaryColor = const Color(0xFFE84393); // Vivid cherry pink
+        accentColor = const Color(0xFFFFE8EF);
+        borderColor = const Color(0xFFF5C6D6);
+        cardBg = const Color(0xFFFFFAFB);
+        textPrimary = const Color(0xFF3D0B1A);
+        textSecondary = const Color(0xFF9E5070);
+        brightness = Brightness.light;
+        break;
+      case 'lava_red':
+        scaffoldBg = const Color(0xFF0F0500); // Volcanic dark
+        primaryColor = const Color(0xFFFF4500); // Lava orange-red
+        accentColor = const Color(0xFF1E0A00);
+        borderColor = const Color(0xFF3D1200);
+        cardBg = const Color(0xFF140700);
+        textPrimary = const Color(0xFFFFE8DC);
+        textSecondary = const Color(0xFFCC7755);
+        brightness = Brightness.dark;
+        break;
+      case 'arctic_ice':
+        scaffoldBg = const Color(0xFFF0F8FF); // Alice blue
+        primaryColor = const Color(0xFF007AFF); // Arctic blue
+        accentColor = const Color(0xFFDDEEFF);
+        borderColor = const Color(0xFFBAD6F0);
+        cardBg = const Color(0xFFF8FCFF);
+        textPrimary = const Color(0xFF0A1929);
+        textSecondary = const Color(0xFF4D7A9E);
+        brightness = Brightness.light;
+        break;
+      case 'sage_minimal':
+        scaffoldBg = const Color(0xFFF4F7F2); // Soft sage white
+        primaryColor = const Color(0xFF5B7F5C); // Sage green
+        accentColor = const Color(0xFFE5EDE4);
+        borderColor = const Color(0xFFCCDDCA);
+        cardBg = const Color(0xFFF9FBF8);
+        textPrimary = const Color(0xFF1C2B1D);
+        textSecondary = const Color(0xFF607860);
+        brightness = Brightness.light;
+        break;
+      case 'midnight_indigo':
+        scaffoldBg = const Color(0xFF060612); // Deep midnight
+        primaryColor = const Color(0xFF5E5CE6); // Indigo-violet
+        accentColor = const Color(0xFF0E0E26);
+        borderColor = const Color(0xFF1E1E46);
+        cardBg = const Color(0xFF0A0A1E);
+        textPrimary = const Color(0xFFE8E8FF);
+        textSecondary = const Color(0xFF8888C4);
+        brightness = Brightness.dark;
+        break;
+      case 'steel_noir':
+        scaffoldBg = const Color(0xFF111316); // Gunmetal dark
+        primaryColor = const Color(0xFF98A0B4); // Steel grey accent
+        accentColor = const Color(0xFF1A1D22);
+        borderColor = const Color(0xFF2A2D35);
+        cardBg = const Color(0xFF161920);
+        textPrimary = const Color(0xFFDDE2ED);
+        textSecondary = const Color(0xFF787E90);
+        brightness = Brightness.dark;
+        break;
+      case 'galaxy_purple':
+        scaffoldBg = const Color(0xFF050010); // Cosmic void
+        primaryColor = const Color(0xFFAF52DE); // Galaxy purple
+        accentColor = const Color(0xFF130030);
+        borderColor = const Color(0xFF2D0060);
+        cardBg = const Color(0xFF0A0020);
+        textPrimary = const Color(0xFFF0E6FF);
+        textSecondary = const Color(0xFF9966CC);
+        brightness = Brightness.dark;
+        break;
       default:
         // Fallback to classic light or classic dark
         if (isDark) {

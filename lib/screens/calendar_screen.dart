@@ -18,6 +18,40 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   DateTime _selectedDate = DateTime.now();
   String _selectedView = 'day'; // 'month', 'week', 'day'
 
+  // Day-strip scroll controller – used to centre today
+  final ScrollController _dayStripController = ScrollController();
+
+  // Width of each day cell (container width 54 + 2*6 margin = 66px)
+  static const double _dayCellWidth = 66.0;
+  // Number of days before today shown in the strip
+  static const int _daysBefore = 30;
+  // Total days shown
+  static const int _totalDays = 61; // 30 + today + 30
+
+  void _scrollDayStripToToday() {
+    // Centre "today" = index _daysBefore in the strip.
+    // We want the cell centred on screen, so offset = index * cellWidth - (screenWidth/2 - cellWidth/2)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_dayStripController.hasClients) return;
+      final screenWidth = MediaQuery.of(context).size.width;
+      final offset = (_daysBefore * _dayCellWidth) - (screenWidth / 2) + (_dayCellWidth / 2);
+      _dayStripController.jumpTo(offset.clamp(0.0, _dayStripController.position.maxScrollExtent));
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Scroll to centre today after first layout
+    _scrollDayStripToToday();
+  }
+
+  @override
+  void dispose() {
+    _dayStripController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     // Reset date to today whenever user switches to the Calendar tab
@@ -26,6 +60,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         setState(() {
           _selectedDate = DateTime.now();
         });
+        // Re-centre today whenever the calendar tab is tapped
+        _scrollDayStripToToday();
       }
     });
 
@@ -95,10 +131,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         height: 80,
         padding: const EdgeInsets.symmetric(vertical: 8.0),
         child: ListView.builder(
+          controller: _dayStripController,
           scrollDirection: Axis.horizontal,
-          itemCount: 15,
+          itemCount: _totalDays,
           itemBuilder: (context, index) {
-            final date = now.subtract(const Duration(days: 7)).add(Duration(days: index));
+            // index 0 = 30 days ago, index _daysBefore = today
+            final date = now.subtract(Duration(days: _daysBefore)).add(Duration(days: index));
             final isSelected = date.year == _selectedDate.year &&
                 date.month == _selectedDate.month &&
                 date.day == _selectedDate.day;

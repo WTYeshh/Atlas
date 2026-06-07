@@ -7,7 +7,7 @@ import 'settings_repository.dart';
 
 class AuthRepository {
   static const String defaultWebClientId =
-      '600003966208-dvpdiavl8qh5lr5igh7dstggc2q5i966.apps.googleusercontent.com';
+      '600003966208-0cqdc1m7nisr9p021us5eikfn76h9a1n.apps.googleusercontent.com';
 
   final SecureStorage _secureStorage = SecureStorage();
   final SettingsRepository _settingsRepo = SettingsRepository();

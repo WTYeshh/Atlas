@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme.dart';
 import 'screens/auth_screen.dart';
 import 'screens/main_navigation.dart';
+import 'screens/welcome_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/calendar_provider.dart';
@@ -35,6 +36,8 @@ class AtlasApp extends ConsumerStatefulWidget {
 }
 
 class _AtlasAppState extends ConsumerState<AtlasApp> {
+  bool _showWelcome = true;
+
   @override
   void initState() {
     super.initState();
@@ -70,29 +73,42 @@ class _AtlasAppState extends ConsumerState<AtlasApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
-      home: authState.isLoading
-          ? Scaffold(
-              backgroundColor: AppTheme.darkTheme.scaffoldBackgroundColor,
-              body: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 16),
-                    Text(
-                      'ATLAS',
-                      style: AppTheme.darkTheme.textTheme.titleLarge?.copyWith(
-                        letterSpacing: 4,
-                        fontWeight: FontWeight.w700,
+      home: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 500),
+        child: _showWelcome
+            ? WelcomeScreen(
+                key: const ValueKey('welcome'),
+                onComplete: () {
+                  setState(() {
+                    _showWelcome = false;
+                  });
+                },
+              )
+            : authState.isLoading
+                ? Scaffold(
+                    key: const ValueKey('loading'),
+                    backgroundColor: AppTheme.darkTheme.scaffoldBackgroundColor,
+                    body: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(),
+                          const SizedBox(height: 16),
+                          Text(
+                            'ATLAS',
+                            style: AppTheme.darkTheme.textTheme.titleLarge?.copyWith(
+                              letterSpacing: 4,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-            )
-          : authState.isAuthenticated
-              ? const MainNavigation()
-              : const AuthScreen(),
+                  )
+                : authState.isAuthenticated
+                    ? const MainNavigation(key: ValueKey('navigation'))
+                    : const AuthScreen(key: ValueKey('auth')),
+      ),
     );
   }
 }

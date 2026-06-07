@@ -26,7 +26,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -58,7 +58,8 @@ class DatabaseHelper {
         subject TEXT,
         status TEXT NOT NULL,
         reminder_id INTEGER,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        rescheduled_count INTEGER DEFAULT 0
       )
     ''');
 
@@ -216,6 +217,13 @@ class DatabaseHelper {
         await db.execute('ALTER TABLE semester_courses ADD COLUMN marks REAL');
       } catch (e) {
         print('DatabaseHelper: ALTER TABLE semester_courses error (might already exist): $e');
+      }
+    }
+    if (oldVersion < 6) {
+      try {
+        await db.execute('ALTER TABLE tasks ADD COLUMN rescheduled_count INTEGER DEFAULT 0');
+      } catch (e) {
+        print('DatabaseHelper: ALTER TABLE tasks error (rescheduled_count might already exist): $e');
       }
     }
   }

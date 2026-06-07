@@ -7,6 +7,7 @@ class TaskModel {
   final String status; // pending, completed
   final int? reminderId;
   final String updatedAt;
+  final int rescheduledCount;
 
   TaskModel({
     required this.id,
@@ -17,6 +18,7 @@ class TaskModel {
     required this.status,
     this.reminderId,
     required this.updatedAt,
+    this.rescheduledCount = 0,
   });
 
   Map<String, dynamic> toMap() {
@@ -29,6 +31,7 @@ class TaskModel {
       'status': status,
       'reminder_id': reminderId,
       'updated_at': updatedAt,
+      'rescheduled_count': rescheduledCount,
     };
   }
 
@@ -42,6 +45,7 @@ class TaskModel {
       status: map['status'] as String,
       reminderId: map['reminder_id'] as int?,
       updatedAt: map['updated_at'] as String,
+      rescheduledCount: map['rescheduled_count'] as int? ?? 0,
     );
   }
 
@@ -54,6 +58,7 @@ class TaskModel {
     String? status,
     int? reminderId,
     String? updatedAt,
+    int? rescheduledCount,
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -64,6 +69,8 @@ class TaskModel {
       status: status ?? this.status,
       reminderId: reminderId ?? this.reminderId,
       updatedAt: updatedAt ?? this.updatedAt,
+      rescheduledCount: rescheduledCount ?? this.rescheduledCount,
     );
   }
 }
+

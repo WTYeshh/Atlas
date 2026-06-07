@@ -224,6 +224,7 @@ class _DailyGreetingDialogState extends ConsumerState<DailyGreetingDialog> {
     
     final updatedTask = task.copyWith(
       dueDate: tomorrowStr,
+      rescheduledCount: task.rescheduledCount + 1,
       updatedAt: DateTime.now().toIso8601String(),
     );
 
@@ -394,7 +395,7 @@ class _DailyGreetingDialogState extends ConsumerState<DailyGreetingDialog> {
                                 final wasCompleted = task.status == 'completed';
                                 ref.read(tasksProvider.notifier).toggleTaskStatus(task.id);
                                 if (!wasCompleted) {
-                                  await ref.read(scholarProvider.notifier).completeTask(task.priority);
+                                  await ref.read(scholarProvider.notifier).completeTask(task);
                                 }
                               },
                               onReschedule: showReschedule ? () => _rescheduleTask(task) : null,

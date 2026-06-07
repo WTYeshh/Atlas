@@ -1,7 +1,7 @@
 import 'dart:math';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../repositories/settings_repository.dart';
+import '../models/task_model.dart';
 import '../services/discord_digest_service.dart';
 
 class ScholarState {
@@ -97,7 +97,8 @@ class ScholarNotifier extends StateNotifier<ScholarState> {
     }
   }
 
-  Future<Map<String, dynamic>> completeTask(String priority) async {
+  Future<Map<String, dynamic>> completeTask(TaskModel task) async {
+    final priority = task.priority;
     int xpReward = 15;
     int coinReward = 5;
     if (priority == 'high') {
@@ -106,6 +107,18 @@ class ScholarNotifier extends StateNotifier<ScholarState> {
     } else if (priority == 'medium') {
       xpReward = 30;
       coinReward = 10;
+    }
+
+    // Check if task was postponed/rescheduled or completed late
+    final isRescheduled = task.rescheduledCount > 0;
+    final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+    final isLate = todayStr.compareTo(task.dueDate) > 0;
+    final hasPenalty = isRescheduled || isLate;
+
+    if (hasPenalty) {
+      // 50% reward reduction penalty (using floor division)
+      xpReward = xpReward ~/ 2;
+      coinReward = coinReward ~/ 2;
     }
 
     int newXp = state.xp + xpReward;
@@ -140,6 +153,7 @@ class ScholarNotifier extends StateNotifier<ScholarState> {
       'coinsGained': coinReward,
       'leveledUp': leveledUp,
       'newLevel': newLevel,
+      'hasPenalty': hasPenalty,
     };
   }
 

@@ -130,7 +130,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> with SingleTickerProv
                   final wasCompleted = task.status == 'completed';
                   ref.read(tasksProvider.notifier).toggleTaskStatus(task.id);
                   if (!wasCompleted) {
-                    final reward = await ref.read(scholarProvider.notifier).completeTask(task.priority);
+                    final reward = await ref.read(scholarProvider.notifier).completeTask(task);
                     if (context.mounted) {
                       _showXpGainedSnackBar(context, reward);
                     }
@@ -276,6 +276,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> with SingleTickerProv
     final coinsGained = reward['coinsGained'] as int;
     final leveledUp = reward['leveledUp'] as bool;
     final newLevel = reward['newLevel'] as int;
+    final hasPenalty = reward['hasPenalty'] as bool? ?? false;
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -284,12 +285,15 @@ class _TasksScreenState extends ConsumerState<TasksScreen> with SingleTickerProv
           children: [
             const Icon(Icons.flash_on, color: Colors.amber, size: 20),
             const SizedBox(width: 8),
-            Text(
-              '+$xpGained XP  •  🪙 +$coinsGained Coins',
-              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+            Expanded(
+              child: Text(
+                '+$xpGained XP  •  🪙 +$coinsGained Coins' + 
+                    (hasPenalty ? ' (Late/Rescheduled Penalty!) ⚠️' : ''),
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+              ),
             ),
             if (leveledUp) ...[
-              const Spacer(),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
@@ -305,7 +309,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> with SingleTickerProv
           ],
         ),
         backgroundColor: leveledUp ? Colors.purple : const Color(0xFF1C1C1E),
-        duration: const Duration(seconds: 2),
+        duration: const Duration(seconds: 3),
       ),
     );
 

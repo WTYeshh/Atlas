@@ -47,6 +47,7 @@ class DatabaseRepository {
       'status': 'pending',
       'reminder_id': 2001,
       'updated_at': DateTime.now().toIso8601String(),
+      'rescheduled_count': 0,
     },
     {
       'id': 't2',
@@ -57,6 +58,7 @@ class DatabaseRepository {
       'status': 'completed',
       'reminder_id': null,
       'updated_at': DateTime.now().toIso8601String(),
+      'rescheduled_count': 0,
     }
   ];
 

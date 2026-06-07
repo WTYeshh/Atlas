@@ -20,6 +20,9 @@ void main() {
       ),
     );
 
+    // Settle welcome screen animation (2.5 seconds + buffer)
+    await tester.pump(const Duration(seconds: 3));
+
     // Verify that ATLAS title or loading indicator is shown.
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });

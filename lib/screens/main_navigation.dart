@@ -3,6 +3,7 @@ import 'home_screen.dart';
 import 'calendar_screen.dart';
 import 'tasks_screen.dart';
 import 'academic_tracker_screen.dart';
+import 'academy_guild_screen.dart';
 import 'settings_screen.dart';
 import '../services/update_service.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -27,6 +28,7 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
     const CalendarScreen(),
     const TasksScreen(),
     const AcademicTrackerScreen(),
+    const AcademyGuildScreen(),
   ];
 
   @override
@@ -185,7 +187,9 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
                   ? 'Calendar'
                   : selectedIndex == 2
                       ? 'Tasks'
-                      : 'Academics',
+                      : selectedIndex == 3
+                          ? 'Academics'
+                          : 'Scholar Guild',
           style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.5),
         ),
         actions: [
@@ -276,6 +280,11 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
               icon: Icon(Icons.school_outlined),
               activeIcon: Icon(Icons.school),
               label: 'Academics',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.military_tech_outlined),
+              activeIcon: Icon(Icons.military_tech),
+              label: 'Guild',
             ),
           ],
         ),

@@ -8,6 +8,8 @@ import '../providers/tasks_provider.dart';
 import '../models/event_model.dart';
 import '../models/task_model.dart';
 import '../core/secure_storage.dart';
+import '../providers/scholar_provider.dart';
+import '../services/discord_digest_service.dart';
 
 enum GreetingMode { morning, night }
 
@@ -274,6 +276,10 @@ class _DailyGreetingDialogState extends ConsumerState<DailyGreetingDialog> {
             _showCelebration = true;
           });
         }
+        // Send milestone celebration to Discord for real completions
+        if (!widget.mockAllCompleted) {
+          ref.read(discordDigestServiceProvider).sendMilestoneCelebrationPost(totalTasksCount);
+        }
       });
     }
 
@@ -384,8 +390,12 @@ class _DailyGreetingDialogState extends ConsumerState<DailyGreetingDialog> {
                               subtitle: task.subject != null ? 'Assignment • ${task.subject}' : 'Task',
                               isTask: true,
                               checked: isCompleted,
-                              onChanged: (val) {
+                              onChanged: (val) async {
+                                final wasCompleted = task.status == 'completed';
                                 ref.read(tasksProvider.notifier).toggleTaskStatus(task.id);
+                                if (!wasCompleted) {
+                                  await ref.read(scholarProvider.notifier).completeTask(task.priority);
+                                }
                               },
                               onReschedule: showReschedule ? () => _rescheduleTask(task) : null,
                             );

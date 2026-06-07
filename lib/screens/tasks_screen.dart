@@ -4,6 +4,8 @@ import '../providers/tasks_provider.dart';
 import '../models/task_model.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../providers/scholar_provider.dart';
 
 class TasksScreen extends ConsumerStatefulWidget {
   const TasksScreen({super.key});
@@ -124,8 +126,15 @@ class _TasksScreenState extends ConsumerState<TasksScreen> with SingleTickerProv
             child: ListTile(
               leading: Checkbox(
                 value: task.status == 'completed',
-                onChanged: (_) {
+                onChanged: (_) async {
+                  final wasCompleted = task.status == 'completed';
                   ref.read(tasksProvider.notifier).toggleTaskStatus(task.id);
+                  if (!wasCompleted) {
+                    final reward = await ref.read(scholarProvider.notifier).completeTask(task.priority);
+                    if (context.mounted) {
+                      _showXpGainedSnackBar(context, reward);
+                    }
+                  }
                 },
               ),
               title: Text(
@@ -259,6 +268,88 @@ class _TasksScreenState extends ConsumerState<TasksScreen> with SingleTickerProv
           },
         );
       },
+    );
+  }
+
+  void _showXpGainedSnackBar(BuildContext context, Map<String, dynamic> reward) {
+    final xpGained = reward['xpGained'] as int;
+    final coinsGained = reward['coinsGained'] as int;
+    final leveledUp = reward['leveledUp'] as bool;
+    final newLevel = reward['newLevel'] as int;
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.flash_on, color: Colors.amber, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              '+$xpGained XP  •  🪙 +$coinsGained Coins',
+              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            if (leveledUp) ...[
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.amber,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'LEVEL UP: $newLevel!',
+                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10),
+                ),
+              ),
+            ]
+          ],
+        ),
+        backgroundColor: leveledUp ? Colors.purple : const Color(0xFF1C1C1E),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    if (leveledUp) {
+      _showLevelUpDialog(context, newLevel);
+    }
+  }
+
+  void _showLevelUpDialog(BuildContext context, int newLevel) {
+    final title = ref.read(scholarProvider.notifier).getScholarTitle(newLevel);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.shield_outlined, color: Colors.amber),
+            SizedBox(width: 8),
+            Text('SCHOLAR LEVEL UP!'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Congratulations YESHWANTH! You reached a new tier in the Scholar Guild:'),
+            const SizedBox(height: 12),
+            Text(
+              'Level $newLevel',
+              style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              title,
+              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.amber),
+            ),
+            const SizedBox(height: 12),
+            const Text('Level Up Bonus: 🪙 Coins and stats increased!', textAlign: TextAlign.center),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('GUILD ONWARD'),
+          )
+        ],
+      ),
     );
   }
 

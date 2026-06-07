@@ -141,6 +141,15 @@ class DiscordDigestService {
         }
       }
 
+      String botComment = '';
+      if (warnings.isNotEmpty) {
+        botComment = '💀 **Savage Roast Bot**: Look YESHWANTH, your attendance is lower than room temperature. Math and science classes are not optional guest lectures. Close the video games and get your body in a seat! 🦖';
+      } else if (pendingTasks.isNotEmpty) {
+        botComment = '📝 **Scholar Assistant Bot**: You have **${pendingTasks.length} pending assignments** due, YESHWANTH. Let\'s conquer at least one task today to keep the momentum going. You got this! ⚡';
+      } else {
+        botComment = '🚀 **Hype Bot**: YESHWANTH IS ABSOLUTELY COOKING today! 100% schedule completion and clean attendance. Complete legend. Put your feet up, you earned it! 🎉';
+      }
+
       if (warnings.isEmpty) {
         final overallStats = attendanceNotifier.getOverallStats();
         final double overallPercent = overallStats['percentage'] ?? 0.0;
@@ -169,6 +178,11 @@ class DiscordDigestService {
               {
                 'name': '📊 Attendance Standings',
                 'value': attendanceText,
+                'inline': false
+              },
+              {
+                'name': '🤖 Atlas AI Bot Commentary',
+                'value': botComment,
                 'inline': false
               }
             ],
@@ -347,5 +361,157 @@ class DiscordDigestService {
   int _getWeekOfYear(DateTime time) {
     final dayOfYear = int.parse(DateFormat('D').format(time));
     return ((dayOfYear - time.weekday + 10) / 7).floor();
+  }
+
+  Future<bool> sendLevelUpPost(int newLevel, String newTitle) async {
+    const botToken = AppConfig.discordBotToken;
+    const channelId = AppConfig.discordChannelId;
+
+    if (botToken == 'YOUR_DISCORD_BOT_TOKEN' || botToken.trim().isEmpty ||
+        channelId == 'YOUR_DISCORD_CHANNEL_ID' || channelId.trim().isEmpty) {
+      return false;
+    }
+
+    try {
+      final payload = {
+        'embeds': [
+          {
+            'title': '🛡️ SCHOLAR LEVEL UP!',
+            'description': 'Congratulations, **YESHWANTH**! You have advanced to a new tier in the Scholar Guild.',
+            'color': 16750848, // Gold / Orange Hex (0xFFBF00)
+            'fields': [
+              {
+                'name': '📈 New Scholar Level',
+                'value': 'Level **$newLevel**',
+                'inline': true
+              },
+              {
+                'name': '🎖️ Unlocked Scholar Title',
+                'value': '**$newTitle**',
+                'inline': true
+              }
+            ],
+            'footer': {
+              'text': 'Atlas Scholar RPG • Keep grinding!'
+            },
+            'timestamp': DateTime.now().toUtc().toIso8601String()
+          }
+        ]
+      };
+
+      final response = await http.post(
+        Uri.parse('https://discord.com/api/v10/channels/$channelId/messages'),
+        headers: {
+          'Authorization': 'Bot $botToken',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(payload),
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> sendGachaDropPost(String themeName, String rarity) async {
+    const botToken = AppConfig.discordBotToken;
+    const channelId = AppConfig.discordChannelId;
+
+    if (botToken == 'YOUR_DISCORD_BOT_TOKEN' || botToken.trim().isEmpty ||
+        channelId == 'YOUR_DISCORD_CHANNEL_ID' || channelId.trim().isEmpty) {
+      return false;
+    }
+
+    final color = rarity == 'Legendary' ? 16750848 : 12451839; // Gold vs Epic Purple
+
+    try {
+      final payload = {
+        'embeds': [
+          {
+            'title': '💎 GACHA SHOP RARE DROP!',
+            'description': 'Yeshwanth spun the Gacha wheel and unlocked an exclusive layout theme!',
+            'color': color,
+            'fields': [
+              {
+                'name': '🎨 Theme Unlocked',
+                'value': themeName,
+                'inline': true
+              },
+              {
+                'name': '✨ Rarity Tier',
+                'value': '**$rarity**',
+                'inline': true
+              }
+            ],
+            'footer': {
+              'text': 'Customization Shop • Customize your Atlas App'
+            },
+            'timestamp': DateTime.now().toUtc().toIso8601String()
+          }
+        ]
+      };
+
+      final response = await http.post(
+        Uri.parse('https://discord.com/api/v10/channels/$channelId/messages'),
+        headers: {
+          'Authorization': 'Bot $botToken',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(payload),
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> sendMilestoneCelebrationPost(int taskCount) async {
+    const botToken = AppConfig.discordBotToken;
+    const channelId = AppConfig.discordChannelId;
+
+    if (botToken == 'YOUR_DISCORD_BOT_TOKEN' || botToken.trim().isEmpty ||
+        channelId == 'YOUR_DISCORD_CHANNEL_ID' || channelId.trim().isEmpty) {
+      return false;
+    }
+
+    try {
+      final payload = {
+        'embeds': [
+          {
+            'title': '🎆 GOAL MET: 100% COMPLETED!',
+            'description': 'YESHWANTH has cleared all active agenda tasks for today!',
+            'color': 3066993, // Light Green Hex
+            'fields': [
+              {
+                'name': '📋 Tasks Completed',
+                'value': '**$taskCount** tasks',
+                'inline': true
+              },
+              {
+                'name': '🎆 Celebration Status',
+                'value': 'Virtual Cracker Blast Ignited on App! 🎇',
+                'inline': true
+              }
+            ],
+            'footer': {
+              'text': 'Atlas Productivity Milestones'
+            },
+            'timestamp': DateTime.now().toUtc().toIso8601String()
+          }
+        ]
+      };
+
+      final response = await http.post(
+        Uri.parse('https://discord.com/api/v10/channels/$channelId/messages'),
+        headers: {
+          'Authorization': 'Bot $botToken',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(payload),
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (_) {
+      return false;
+    }
   }
 }

@@ -6,6 +6,7 @@ import 'screens/main_navigation.dart';
 import 'screens/welcome_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/scholar_provider.dart';
 import 'providers/calendar_provider.dart';
 import 'providers/tasks_provider.dart';
 import 'services/notification_service.dart';
@@ -66,12 +67,17 @@ class _AtlasAppState extends ConsumerState<AtlasApp> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final themeMode = ref.watch(themeProvider);
+    final scholarState = ref.watch(scholarProvider);
+    final selectedThemeKey = scholarState.selectedTheme;
+
+    final lightTheme = AppTheme.getThemeFor(selectedThemeKey, isDark: false);
+    final darkTheme = AppTheme.getThemeFor(selectedThemeKey, isDark: true);
 
     return MaterialApp(
       title: 'Atlas',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
+      theme: lightTheme,
+      darkTheme: darkTheme,
       themeMode: themeMode,
       home: AnimatedSwitcher(
         duration: const Duration(milliseconds: 500),

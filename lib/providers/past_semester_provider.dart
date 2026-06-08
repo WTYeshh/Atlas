@@ -172,6 +172,7 @@ class PastSemesterNotifier extends StateNotifier<List<PastSemesterModel>> {
       final settingsRepo = SettingsRepository();
       await settingsRepo.deleteSetting('semester_start_date');
       await settingsRepo.deleteSetting('semester_end_date');
+      await settingsRepo.deleteSetting('semester_name');
     }
   }
 }

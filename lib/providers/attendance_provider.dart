@@ -15,6 +15,7 @@ class AttendanceState {
   final List<AttendanceLogModel> logs;
   final String? semesterStartDate;
   final String? semesterEndDate;
+  final String? semesterName;
   final bool isLoading;
   final bool isOnline;
 
@@ -24,6 +25,7 @@ class AttendanceState {
     this.logs = const [],
     this.semesterStartDate,
     this.semesterEndDate,
+    this.semesterName,
     this.isLoading = false,
     this.isOnline = true,
   });
@@ -34,6 +36,7 @@ class AttendanceState {
     List<AttendanceLogModel>? logs,
     String? semesterStartDate,
     String? semesterEndDate,
+    String? semesterName,
     bool? isLoading,
     bool? isOnline,
   }) {
@@ -43,6 +46,7 @@ class AttendanceState {
       logs: logs ?? this.logs,
       semesterStartDate: semesterStartDate ?? this.semesterStartDate,
       semesterEndDate: semesterEndDate ?? this.semesterEndDate,
+      semesterName: semesterName ?? this.semesterName,
       isLoading: isLoading ?? this.isLoading,
       isOnline: isOnline ?? this.isOnline,
     );
@@ -83,20 +87,23 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
     final logs = await _repo.getAttendanceLogs();
     final semStart = await _settingsRepo.getSetting('semester_start_date');
     final semEnd = await _settingsRepo.getSetting('semester_end_date');
+    final semName = await _settingsRepo.getSetting('semester_name');
     state = AttendanceState(
       subjects: subjects,
       slots: slots,
       logs: logs,
       semesterStartDate: semStart,
       semesterEndDate: semEnd,
+      semesterName: semName,
       isLoading: false,
       isOnline: online,
     );
   }
 
-  Future<void> setSemesterDates(String start, String end) async {
+  Future<void> setSemesterDates(String start, String end, String name) async {
     await _settingsRepo.saveSetting('semester_start_date', start);
     await _settingsRepo.saveSetting('semester_end_date', end);
+    await _settingsRepo.saveSetting('semester_name', name);
     await loadAll();
   }
 

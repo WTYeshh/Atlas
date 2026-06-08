@@ -116,9 +116,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 );
               }
               
+              final savedName = ref.read(attendanceProvider).semesterName;
+              final archiveName = (savedName != null && savedName.trim().isNotEmpty)
+                  ? savedName
+                  : 'Semester ending $endDate';
+
               // Archive to SQLite
               await ref.read(pastSemesterProvider.notifier).archiveSemester(
-                name: 'Semester ending $endDate',
+                name: archiveName,
                 startDate: startStr,
                 endDate: endStr,
                 subjects: subjects,

@@ -180,6 +180,7 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
     final attendanceState = ref.read(attendanceProvider);
     final startController = TextEditingController(text: attendanceState.semesterStartDate ?? '');
     final endController = TextEditingController(text: attendanceState.semesterEndDate ?? '');
+    final nameController = TextEditingController(text: attendanceState.semesterName ?? '');
 
     showDialog(
       context: context,
@@ -188,6 +189,15 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Which Semester (e.g. Semester 4)',
+                hintText: 'Enter semester name or number',
+              ),
+              textCapitalization: TextCapitalization.words,
+            ),
+            const SizedBox(height: 16),
             TextField(
               controller: startController,
               readOnly: true,
@@ -240,14 +250,15 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
             onPressed: () async {
               final start = startController.text.trim();
               final end = endController.text.trim();
-              if (start.isEmpty || end.isEmpty) {
+              final name = nameController.text.trim();
+              if (start.isEmpty || end.isEmpty || name.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please select both start and end dates.')),
+                  const SnackBar(content: Text('Please fill out all fields.')),
                 );
                 return;
               }
               Navigator.pop(context);
-              await ref.read(attendanceProvider.notifier).setSemesterDates(start, end);
+              await ref.read(attendanceProvider.notifier).setSemesterDates(start, end, name);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).primaryColor,

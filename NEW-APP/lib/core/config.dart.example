@@ -1,0 +1,5 @@
+class AppConfig {
+  /// Hardcoded Gemini API Key.
+  /// Set your Gemini API key here securely.
+  static const String geminiApiKey = 'YOUR_GEMINI_API_KEY_HERE';
+}

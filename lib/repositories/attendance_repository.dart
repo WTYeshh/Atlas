@@ -212,7 +212,7 @@ class AttendanceRepository {
 
   Future<void> insertAttendanceLog(AttendanceLogModel log) async {
     if (_isWebOrTest) {
-      _webLogs.removeWhere((l) => l['subject_id'] == log.subjectId && l['date'] == log.date);
+      _webLogs.removeWhere((l) => l['subject_id'] == log.subjectId && l['date'] == log.date && l['slot_id'] == log.slotId);
       _webLogs.add(log.toMap());
       return;
     }

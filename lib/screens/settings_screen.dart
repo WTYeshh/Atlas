@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
+import '../providers/past_semester_provider.dart';
+import '../models/past_semester_model.dart';
 import '../repositories/settings_repository.dart';
 import '../repositories/auth_repository.dart';
 import '../services/update_service.dart';
@@ -283,6 +286,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _buildSectionHeader('Alert Preferences'),
                   const SizedBox(height: 8),
                   _buildNotificationConfigCard(context),
+                  const SizedBox(height: 24),
+
+                  // Previous Semesters Configurations
+                  _buildSectionHeader('PREVIOUS SEM DATA'),
+                  const SizedBox(height: 8),
+                  _buildPastSemestersCard(context),
                   const SizedBox(height: 24),
 
                   // App Updates Configurations
@@ -580,17 +589,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const Divider(height: 24),
             ElevatedButton.icon(
               onPressed: () async {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Test notification scheduled in 3 seconds...')),
-                );
-                // Trigger local notification in 3 seconds
-                await Future.delayed(const Duration(seconds: 3));
                 final notificationService = NotificationService();
-                await notificationService.scheduleNotification(
+                await notificationService.requestPermissions();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Sending test notification...')),
+                  );
+                }
+                await notificationService.showNotification(
                   id: 99999,
                   title: 'Test Notification 📱',
                   body: 'This is a test notification from ATLAS. Your notifications are working perfectly!',
-                  scheduledDate: DateTime.now().add(const Duration(seconds: 1)),
                 );
               },
               icon: const Icon(Icons.notifications_active_outlined, size: 16),
@@ -835,6 +844,220 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  String _formatDisplayDate(String? dateStr) {
+    if (dateStr == null || dateStr.trim().isEmpty) return 'Not configured';
+    try {
+      final parts = dateStr.split('-');
+      if (parts.length == 3) {
+        return '${parts[2]}-${parts[1]}-${parts[0].substring(2)}';
+      }
+    } catch (_) {}
+    return dateStr;
+  }
+
+  void _showPastSemesterPreviewDialog(BuildContext context, PastSemesterModel sem) {
+    final List<dynamic> subjectsData = jsonDecode(sem.compiledJson);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(sem.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(
+              '${_formatDisplayDate(sem.startDate)} to ${_formatDisplayDate(sem.endDate)}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: subjectsData.length,
+            itemBuilder: (context, index) {
+              final item = subjectsData[index];
+              final name = item['subjectName'] ?? 'Unknown';
+              final code = item['subjectCode'];
+              final attPercent = (item['attendancePercentage'] as num?)?.toDouble() ?? 0.0;
+              final held = (item['heldClasses'] as num?)?.toInt() ?? 0;
+              final attended = (item['attendedClasses'] as num?)?.toInt() ?? 0;
+              final ia1 = item['ia1'];
+              final ia2 = item['ia2'];
+              final ia3 = item['ia3'];
+              final bestOfTwo = (item['bestOfTwo'] as num?)?.toDouble() ?? 0.0;
+              
+              final isLow = attPercent < (item['minPercentage'] as num? ?? 75.0);
+              final attColor = isLow ? Colors.redAccent : Colors.green;
+              final iaColor = bestOfTwo > 36 ? Colors.green : Colors.redAccent;
+              
+              return Card(
+                margin: const EdgeInsets.symmetric(vertical: 6),
+                elevation: 1,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        code != null ? '[$code] $name' : name,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      const Divider(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Attendance:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          Text(
+                            '${attPercent.toStringAsFixed(1)}% ($attended/$held)',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: attColor),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      const Text('IA Marks:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      const SizedBox(height: 4),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('IA1: ${ia1 ?? "N/A"}', style: const TextStyle(fontSize: 11)),
+                            Text('IA2: ${ia2 ?? "N/A"}', style: const TextStyle(fontSize: 11)),
+                            Text('IA3: ${ia3 ?? "N/A"}', style: const TextStyle(fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Best of 2:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          Text(
+                            '${bestOfTwo.toStringAsFixed(0)} / 100',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: iaColor),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              try {
+                final path = await ref.read(pastSemesterProvider.notifier).downloadSemesterReport(sem);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Report downloaded to: $path'),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to download report: $e'),
+                      backgroundColor: Colors.redAccent,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.download, size: 16),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).primaryColor,
+            ),
+            label: Text('Download Report', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPastSemestersCard(BuildContext context) {
+    final pastSemesters = ref.watch(pastSemesterProvider);
+    
+    if (pastSemesters.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Center(
+            child: Text(
+              'No archived semesters found.',
+              style: TextStyle(color: Theme.of(context).colorScheme.secondary, fontSize: 13),
+            ),
+          ),
+        ),
+      );
+    }
+    
+    return Card(
+      child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: pastSemesters.length,
+        separatorBuilder: (context, index) => const Divider(height: 1),
+        itemBuilder: (context, index) {
+          final sem = pastSemesters[index];
+          return ListTile(
+            leading: Icon(Icons.archive_outlined, color: Theme.of(context).primaryColor),
+            title: Text(sem.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('${_formatDisplayDate(sem.startDate)} to ${_formatDisplayDate(sem.endDate)}'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.preview_outlined, color: Colors.blueAccent),
+                  tooltip: 'Preview',
+                  onPressed: () => _showPastSemesterPreviewDialog(context, sem),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                  tooltip: 'Delete Archive',
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Delete Semester Archive?'),
+                        content: Text('Are you sure you want to permanently delete the archive for "${sem.name}"? This cannot be undone.'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      await ref.read(pastSemesterProvider.notifier).deleteSemester(sem.id);
+                    }
+                  },
+                ),
+              ],
+            ),
+            onTap: () => _showPastSemesterPreviewDialog(context, sem),
+          );
+        },
+      ),
     );
   }
 }

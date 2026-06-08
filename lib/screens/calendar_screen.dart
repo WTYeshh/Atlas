@@ -18,6 +18,31 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   DateTime _selectedDate = DateTime.now();
   String _selectedView = 'day'; // 'month', 'week', 'day'
 
+  String _formatTimeTo12Hour(String time24) {
+    if (time24.isEmpty) return '';
+    try {
+      final parts = time24.split(':');
+      if (parts.length >= 2) {
+        final hour = int.parse(parts[0]);
+        final minute = int.parse(parts[1]);
+        final period = hour >= 12 ? 'PM' : 'AM';
+        final formattedHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+        final formattedMinute = minute.toString().padLeft(2, '0');
+        return '$formattedHour:$formattedMinute $period';
+      }
+    } catch (_) {}
+    return time24;
+  }
+
+  String _formatTimeOfDay(TimeOfDay tod) {
+    final hour = tod.hour;
+    final minute = tod.minute;
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final formattedHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    final formattedMinute = minute.toString().padLeft(2, '0');
+    return '$formattedHour:$formattedMinute $period';
+  }
+
   // Day-strip scroll controller – used to centre today
   final ScrollController _dayStripController = ScrollController();
 
@@ -529,7 +554,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           margin: const EdgeInsets.only(bottom: 12.0),
           child: ListTile(
             title: Text(event.title, style: const TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: Text('${event.time} ${event.description != null ? "• ${event.description}" : ""}'),
+            subtitle: Text('${_formatTimeTo12Hour(event.time)} ${event.description != null ? "• ${event.description}" : ""}'),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -615,7 +640,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     ),
                     ListTile(
                       leading: const Icon(Icons.access_time),
-                      title: Text(selectedTime.format(context)),
+                      title: Text(_formatTimeOfDay(selectedTime)),
                       onTap: () async {
                         final picked = await showTimePicker(
                           context: context,

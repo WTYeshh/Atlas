@@ -36,6 +36,41 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
     super.dispose();
   }
 
+  String _formatTimeTo12Hour(String time24) {
+    if (time24.isEmpty) return '';
+    try {
+      final parts = time24.split(':');
+      if (parts.length >= 2) {
+        final hour = int.parse(parts[0]);
+        final minute = int.parse(parts[1]);
+        final period = hour >= 12 ? 'PM' : 'AM';
+        final formattedHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+        final formattedMinute = minute.toString().padLeft(2, '0');
+        return '$formattedHour:$formattedMinute $period';
+      }
+    } catch (_) {}
+    return time24;
+  }
+
+  String _formatTimeOfDay(TimeOfDay tod) {
+    final hour = tod.hour;
+    final minute = tod.minute;
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final formattedHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    final formattedMinute = minute.toString().padLeft(2, '0');
+    return '$formattedHour:$formattedMinute $period';
+  }
+
+  void _showRangeErrorSnackBar() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Cannot log attendance outside semester range (5 days margin).'),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   Future<void> _pickAndParseImage(bool isTimetable) async {
     final XFile? image = await showModalBottomSheet<XFile?>(
       context: context,
@@ -400,7 +435,7 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                           });
                         }
                       },
-                      child: Text(startTime.format(context)),
+                      child: Text(_formatTimeOfDay(startTime)),
                     ),
                   ],
                 ),
@@ -417,7 +452,7 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                           });
                         }
                       },
-                      child: Text(endTime.format(context)),
+                      child: Text(_formatTimeOfDay(endTime)),
                     ),
                   ],
                 ),
@@ -456,6 +491,151 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                 backgroundColor: Theme.of(context).primaryColor,
               ),
               child: Text('Add Slot', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditSlotDialog(List<SubjectModel> subjects, TimetableSlotModel slot) {
+    if (subjects.isEmpty) return;
+
+    String selectedSubjectId = slot.subjectId;
+    int selectedDay = slot.dayOfWeek;
+    
+    TimeOfDay parseTime(String timeStr) {
+      try {
+        final parts = timeStr.split(':');
+        return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+      } catch (_) {
+        return const TimeOfDay(hour: 9, minute: 0);
+      }
+    }
+
+    TimeOfDay startTime = parseTime(slot.startTime);
+    TimeOfDay endTime = parseTime(slot.endTime);
+    final roomController = TextEditingController(text: slot.classroom ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          title: const Text('Edit Timetable Slot', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DropdownButtonFormField<String>(
+                  value: selectedSubjectId,
+                  decoration: const InputDecoration(labelText: 'Subject'),
+                  items: subjects
+                      .map((sub) => DropdownMenuItem(
+                            value: sub.id,
+                            child: Text(sub.code != null ? '[${sub.code}] ${sub.name}' : sub.name),
+                          ))
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setStateDialog(() {
+                        selectedSubjectId = val;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  value: selectedDay,
+                  decoration: const InputDecoration(labelText: 'Day of Week'),
+                  items: const [
+                    DropdownMenuItem(value: 1, child: Text('Monday')),
+                    DropdownMenuItem(value: 2, child: Text('Tuesday')),
+                    DropdownMenuItem(value: 3, child: Text('Wednesday')),
+                    DropdownMenuItem(value: 4, child: Text('Thursday')),
+                    DropdownMenuItem(value: 5, child: Text('Friday')),
+                    DropdownMenuItem(value: 6, child: Text('Saturday')),
+                    DropdownMenuItem(value: 7, child: Text('Sunday')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) {
+                      setStateDialog(() {
+                        selectedDay = val;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Start Time:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    TextButton(
+                      onPressed: () async {
+                        final time = await showTimePicker(context: context, initialTime: startTime);
+                        if (time != null) {
+                          setStateDialog(() {
+                            startTime = time;
+                          });
+                        }
+                      },
+                      child: Text(_formatTimeOfDay(startTime)),
+                    ),
+                  ],
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('End Time:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    TextButton(
+                      onPressed: () async {
+                        final time = await showTimePicker(context: context, initialTime: endTime);
+                        if (time != null) {
+                          setStateDialog(() {
+                            endTime = time;
+                          });
+                        }
+                      },
+                      child: Text(_formatTimeOfDay(endTime)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: roomController,
+                  decoration: const InputDecoration(
+                    labelText: 'Classroom / Lecture Hall (optional)',
+                    hintText: 'e.g. Room 402, Seminar Hall',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final startStr = '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}';
+                final endStr = '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}';
+                final room = roomController.text.trim();
+
+                Navigator.pop(context);
+                await ref.read(attendanceProvider.notifier).updateTimetableSlot(
+                      id: slot.id,
+                      subjectId: selectedSubjectId,
+                      dayOfWeek: selectedDay,
+                      start: startStr,
+                      end: endStr,
+                      room: room.isEmpty ? null : room,
+                    );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).primaryColor,
+              ),
+              child: Text('Save Changes', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
             ),
           ],
         ),
@@ -740,11 +920,15 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                 onPressed: () async {
                   Navigator.pop(context);
                   final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
-                  await ref.read(attendanceProvider.notifier).markAttendance(
-                        subjectId: subject.id,
-                        date: dateStr,
-                        status: status,
-                      );
+                  try {
+                    await ref.read(attendanceProvider.notifier).markAttendance(
+                          subjectId: subject.id,
+                          date: dateStr,
+                          status: status,
+                        );
+                  } catch (_) {
+                    _showRangeErrorSnackBar();
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).primaryColor,
@@ -1110,42 +1294,63 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
             ),
             const SizedBox(height: 2),
             Text(
-              '$formattedDate (${slot.startTime})',
+              '$formattedDate (${_formatTimeTo12Hour(slot.startTime)})',
               style: const TextStyle(fontSize: 11, color: Colors.grey),
             ),
             const Spacer(),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _buildActionChip(
+                 _buildActionChip(
                   color: Colors.green,
                   icon: Icons.check,
                   tooltip: 'Present',
-                  onTap: () => ref.read(attendanceProvider.notifier).markAttendance(
-                        subjectId: subject.id,
-                        date: date,
-                        status: 'present',
-                      ),
+                  onTap: () async {
+                    try {
+                      await ref.read(attendanceProvider.notifier).markAttendance(
+                            subjectId: subject.id,
+                            date: date,
+                            status: 'present',
+                            slotId: slot.id,
+                          );
+                    } catch (_) {
+                      _showRangeErrorSnackBar();
+                    }
+                  },
                 ),
                 _buildActionChip(
                   color: Colors.red,
                   icon: Icons.close,
                   tooltip: 'Absent',
-                  onTap: () => ref.read(attendanceProvider.notifier).markAttendance(
-                        subjectId: subject.id,
-                        date: date,
-                        status: 'absent',
-                      ),
+                  onTap: () async {
+                    try {
+                      await ref.read(attendanceProvider.notifier).markAttendance(
+                            subjectId: subject.id,
+                            date: date,
+                            status: 'absent',
+                            slotId: slot.id,
+                          );
+                    } catch (_) {
+                      _showRangeErrorSnackBar();
+                    }
+                  },
                 ),
                 _buildActionChip(
                   color: Colors.grey,
                   icon: Icons.remove,
                   tooltip: 'Cancelled',
-                  onTap: () => ref.read(attendanceProvider.notifier).markAttendance(
-                        subjectId: subject.id,
-                        date: date,
-                        status: 'cancelled',
-                      ),
+                  onTap: () async {
+                    try {
+                      await ref.read(attendanceProvider.notifier).markAttendance(
+                            subjectId: subject.id,
+                            date: date,
+                            status: 'cancelled',
+                            slotId: slot.id,
+                          );
+                    } catch (_) {
+                      _showRangeErrorSnackBar();
+                    }
+                  },
                 ),
               ],
             ),
@@ -1389,6 +1594,7 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
     required String subjectId,
     required String date,
     required String? currentStatus,
+    required String? slotId,
   }) {
     final notifier = ref.read(attendanceProvider.notifier);
     
@@ -1404,11 +1610,16 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
           padding: const EdgeInsets.symmetric(horizontal: 4.0),
           child: InkWell(
             onTap: () async {
-              await notifier.markAttendance(
-                subjectId: subjectId,
-                date: date,
-                status: status,
-              );
+              try {
+                await notifier.markAttendance(
+                  subjectId: subjectId,
+                  date: date,
+                  status: status,
+                  slotId: slotId,
+                );
+              } catch (_) {
+                _showRangeErrorSnackBar();
+              }
             },
             borderRadius: BorderRadius.circular(8),
             child: AnimatedContainer(
@@ -1526,7 +1737,7 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                 if (subject.id.isEmpty) return const SizedBox.shrink();
 
                 final log = state.logs.firstWhere(
-                  (l) => l.subjectId == slot.subjectId && l.date == todayStr,
+                  (l) => l.subjectId == slot.subjectId && l.date == todayStr && l.slotId == slot.id,
                   orElse: () => AttendanceLogModel(id: '', subjectId: '', date: '', status: '', updatedAt: ''),
                 );
                 final currentStatus = log.status.isEmpty ? null : log.status;
@@ -1566,7 +1777,7 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              '${slot.startTime} - ${slot.endTime}',
+                              '${_formatTimeTo12Hour(slot.startTime)} - ${_formatTimeTo12Hour(slot.endTime)}',
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
@@ -1593,6 +1804,7 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                           subjectId: subject.id,
                           date: todayStr,
                           currentStatus: currentStatus,
+                          slotId: slot.id,
                         ),
                       ],
                     ),
@@ -1613,7 +1825,7 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                     ),
                     Text(
-                      "Unconfirmed classes from the last 14 days",
+                      "Unconfirmed classes from the last 7 days",
                       style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onBackground.withOpacity(0.6)),
                     ),
                   ],
@@ -1684,7 +1896,7 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    '${slot.startTime} - ${slot.endTime}',
+                                    '${_formatTimeTo12Hour(slot.startTime)} - ${_formatTimeTo12Hour(slot.endTime)}',
                                     style: const TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
@@ -1698,6 +1910,7 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                                 subjectId: subject.id,
                                 date: dateStr,
                                 currentStatus: null,
+                                slotId: slot.id,
                               ),
                             ],
                           ),
@@ -1773,26 +1986,35 @@ class _AttendanceDashboardScreenState extends ConsumerState<AttendanceDashboardS
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text(
-                        '${slot.startTime} - ${slot.endTime}${slot.classroom != null ? " • ${slot.classroom}" : ""}',
+                        '${_formatTimeTo12Hour(slot.startTime)} - ${_formatTimeTo12Hour(slot.endTime)}${slot.classroom != null ? " • ${slot.classroom}" : ""}',
                       ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
-                        onPressed: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Delete Timetable Slot?'),
-                              content: const Text('Are you sure you want to delete this weekly class slot?'),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                                TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
-                              ],
-                            ),
-                          );
-                          if (confirm == true) {
-                            await ref.read(attendanceProvider.notifier).deleteTimetableSlot(slot.id);
-                          }
-                        },
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, color: Colors.blueAccent, size: 18),
+                            onPressed: () => _showEditSlotDialog(subjects, slot),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Delete Timetable Slot?'),
+                                  content: const Text('Are you sure you want to delete this weekly class slot?'),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                                    TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true) {
+                                await ref.read(attendanceProvider.notifier).deleteTimetableSlot(slot.id);
+                              }
+                            },
+                          ),
+                        ],
                       ),
                     );
                   }).toList(),

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/subject_model.dart';
@@ -15,6 +16,7 @@ class AttendanceState {
   final String? semesterStartDate;
   final String? semesterEndDate;
   final bool isLoading;
+  final bool isOnline;
 
   AttendanceState({
     this.subjects = const [],
@@ -23,6 +25,7 @@ class AttendanceState {
     this.semesterStartDate,
     this.semesterEndDate,
     this.isLoading = false,
+    this.isOnline = true,
   });
 
   AttendanceState copyWith({
@@ -32,6 +35,7 @@ class AttendanceState {
     String? semesterStartDate,
     String? semesterEndDate,
     bool? isLoading,
+    bool? isOnline,
   }) {
     return AttendanceState(
       subjects: subjects ?? this.subjects,
@@ -40,6 +44,7 @@ class AttendanceState {
       semesterStartDate: semesterStartDate ?? this.semesterStartDate,
       semesterEndDate: semesterEndDate ?? this.semesterEndDate,
       isLoading: isLoading ?? this.isLoading,
+      isOnline: isOnline ?? this.isOnline,
     );
   }
 }
@@ -64,6 +69,15 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
 
   Future<void> loadAll() async {
     state = state.copyWith(isLoading: true);
+    
+    bool online = true;
+    try {
+      final result = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
+      online = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      online = false;
+    }
+
     final subjects = await _repo.getSubjects();
     final slots = await _repo.getTimetableSlots();
     final logs = await _repo.getAttendanceLogs();
@@ -76,6 +90,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       semesterStartDate: semStart,
       semesterEndDate: semEnd,
       isLoading: false,
+      isOnline: online,
     );
   }
 
@@ -250,10 +265,56 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
     await _reminderService.rescheduleAllReminders();
   }
 
+  Future<void> updateTimetableSlot({
+    required String id,
+    required String subjectId,
+    required int dayOfWeek,
+    required String start,
+    required String end,
+    required String? room,
+  }) async {
+    final slot = TimetableSlotModel(
+      id: id,
+      subjectId: subjectId,
+      dayOfWeek: dayOfWeek,
+      startTime: start,
+      endTime: end,
+      classroom: room,
+    );
+    await _repo.insertTimetableSlot(slot);
+    await loadAll();
+    await _reminderService.rescheduleAllReminders();
+  }
+
   Future<void> clearTimetable() async {
     await _repo.clearTimetable();
     await loadAll();
     await _reminderService.rescheduleAllReminders();
+  }
+
+  bool isDateWithinSemesterRange(String dateStr) {
+    final startStr = state.semesterStartDate;
+    final endStr = state.semesterEndDate;
+    if (startStr == null || endStr == null || startStr.trim().isEmpty || endStr.trim().isEmpty) {
+      return true; // No dates configured, allow logging
+    }
+    final targetDate = DateTime.tryParse(dateStr);
+    final startDate = DateTime.tryParse(startStr);
+    final endDate = DateTime.tryParse(endStr);
+    
+    if (targetDate == null || startDate == null || endDate == null) {
+      return true;
+    }
+    
+    final minDate = startDate.subtract(const Duration(days: 5));
+    final maxDate = endDate.add(const Duration(days: 5));
+    
+    final target = DateTime(targetDate.year, targetDate.month, targetDate.day);
+    final min = DateTime(minDate.year, minDate.month, minDate.day);
+    final max = DateTime(maxDate.year, maxDate.month, maxDate.day);
+    
+    return (target.isAtSameMomentAs(min) || target.isAfter(min)) &&
+           (target.isAtSameMomentAs(max) || target.isBefore(max));
   }
 
   // --- Attendance Actions ---
@@ -261,9 +322,14 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
     required String subjectId,
     required String date,
     required String status, // 'present', 'absent', 'cancelled'
+    String? slotId,
   }) async {
-    // Check if there is an existing log for this subject on this date
-    final existingIndex = state.logs.indexWhere((l) => l.subjectId == subjectId && l.date == date);
+    if (!isDateWithinSemesterRange(date)) {
+      throw Exception('outside_range');
+    }
+
+    // Check if there is an existing log for this subject on this date and slotId
+    final existingIndex = state.logs.indexWhere((l) => l.subjectId == subjectId && l.date == date && l.slotId == slotId);
     
     if (existingIndex != -1) {
       final existingLog = state.logs[existingIndex];
@@ -278,6 +344,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
         subjectId: subjectId,
         date: date,
         status: status,
+        slotId: slotId,
         updatedAt: DateTime.now().toIso8601String(),
       );
       await _repo.insertAttendanceLog(newLog);
@@ -340,16 +407,20 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
     return stats;
   }
 
-  /// Calculates pending classes that occurred in the last 14 days according to the weekly timetable,
+  /// Calculates pending classes that occurred in the last 7 days according to the weekly timetable,
   /// but have not been logged/confirmed yet.
   List<Map<String, dynamic>> getPendingConfirmations() {
+    if (!state.isOnline) {
+      return []; // Return empty list when offline to prevent marking unconfirmed classes
+    }
+
     final now = DateTime.now();
     final List<Map<String, dynamic>> pending = [];
     
-    // We scan the past 14 days up to today
-    final startDate = now.subtract(const Duration(days: 14));
+    // We scan the past 7 days up to today
+    final startDate = now.subtract(const Duration(days: 7));
     
-    for (int i = 0; i <= 14; i++) {
+    for (int i = 0; i <= 7; i++) {
       final date = startDate.add(Duration(days: i));
       final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
       final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
@@ -360,8 +431,8 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       final daySlots = state.slots.where((s) => s.dayOfWeek == weekday).toList();
       
       for (var slot in daySlots) {
-        // Check if there is an attendance log for this subject on this date
-        final hasLog = state.logs.any((l) => l.subjectId == slot.subjectId && l.date == dateStr);
+        // Check if there is an attendance log for this subject, date, and slotId
+        final hasLog = state.logs.any((l) => l.subjectId == slot.subjectId && l.date == dateStr && l.slotId == slot.id);
         if (!hasLog) {
           // If it's today, check if the class end time has already passed
           if (dateStr == todayStr) {

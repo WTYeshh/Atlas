@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/calendar_provider.dart';
 import '../providers/tasks_provider.dart';
 import '../providers/attendance_provider.dart';
+import '../providers/past_semester_provider.dart';
+import '../providers/ia_marks_provider.dart';
+import '../repositories/settings_repository.dart';
 import '../models/event_model.dart';
 import '../models/task_model.dart';
 import 'package:intl/intl.dart';
@@ -11,17 +14,163 @@ import '../services/discord_service.dart';
 import '../services/discord_digest_service.dart';
 import 'attendance_dashboard_screen.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  bool _isDialogShowing = false;
+
+  Future<void> _checkSemesterCompletion(String endDate) async {
+    if (_isDialogShowing) return;
+    
+    // Check if end date has passed
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final end = DateTime.tryParse(endDate);
+    if (end == null) return;
+    final endDateObj = DateTime(end.year, end.month, end.day);
+    
+    if (!todayDate.isAfter(endDateObj)) {
+      return; // Not passed yet
+    }
+    
+    final settingsRepo = SettingsRepository();
+    final shown = await settingsRepo.getSetting('congratulatory_popup_shown_for_$endDate');
+    if (shown == 'true') return;
+    
+    _isDialogShowing = true;
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Congratulations!', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text(
+          'Congratulations on completing your semester!\n\nWould you like to archive your academic records (attendance percentage, course details, and IA scores) before preparing the app for the next semester?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              // Mark popup as shown
+              final settingsRepo = SettingsRepository();
+              await settingsRepo.saveSetting('congratulatory_popup_shown_for_$endDate', 'true');
+              
+              if (context.mounted) {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => const Center(child: CircularProgressIndicator()),
+                );
+              }
+              
+              await ref.read(pastSemesterProvider.notifier).resetSemester();
+              await ref.read(attendanceProvider.notifier).loadAll();
+              await ref.read(iaMarksProvider.notifier).loadAll();
+              
+              if (context.mounted) {
+                Navigator.of(context).pop(); // dismiss loading
+                Navigator.of(context).pop(); // dismiss dialog
+              }
+              _isDialogShowing = false;
+            },
+            child: Text(
+              'Reset Only',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.45),
+                fontSize: 11,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              // Archive data
+              final attendanceNotifier = ref.read(attendanceProvider.notifier);
+              final iaNotifier = ref.read(iaMarksProvider.notifier);
+              
+              final subjects = ref.read(attendanceProvider).subjects;
+              final subjectStats = attendanceNotifier.getSubjectStats();
+              
+              final Map<String, List<double?>> subjectIaMarks = {};
+              for (var sub in subjects) {
+                final result = iaNotifier.computeBestOf2(sub.id);
+                subjectIaMarks[sub.id] = [result.ia1, result.ia2, result.ia3];
+              }
+              
+              final startStr = ref.read(attendanceProvider).semesterStartDate ?? '';
+              final endStr = ref.read(attendanceProvider).semesterEndDate ?? '';
+              
+              // Mark popup as shown
+              final settingsRepo = SettingsRepository();
+              await settingsRepo.saveSetting('congratulatory_popup_shown_for_$endDate', 'true');
+              
+              if (context.mounted) {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => const Center(child: CircularProgressIndicator()),
+                );
+              }
+              
+              // Archive to SQLite
+              await ref.read(pastSemesterProvider.notifier).archiveSemester(
+                name: 'Semester ending $endDate',
+                startDate: startStr,
+                endDate: endStr,
+                subjects: subjects,
+                subjectStats: subjectStats,
+                subjectIaMarks: subjectIaMarks,
+              );
+              
+              // Perform reset
+              await ref.read(pastSemesterProvider.notifier).resetSemester();
+              await ref.read(attendanceProvider.notifier).loadAll();
+              await ref.read(iaMarksProvider.notifier).loadAll();
+              
+              if (context.mounted) {
+                Navigator.of(context).pop(); // dismiss loading
+                Navigator.of(context).pop(); // dismiss dialog
+              }
+              _isDialogShowing = false;
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).primaryColor,
+              elevation: 2,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            child: const Text(
+              'Archive & Reset',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final events = ref.watch(calendarProvider);
     final tasks = ref.watch(tasksProvider);
     final attendanceState = ref.watch(attendanceProvider);
     final attendanceNotifier = ref.read(attendanceProvider.notifier);
 
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+    // Check for semester completion dialog triggering
+    final semesterEndDate = attendanceState.semesterEndDate;
+    if (semesterEndDate != null && semesterEndDate.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkSemesterCompletion(semesterEndDate);
+      });
+    }
 
     // Filter today's events
     final todayEvents = events.where((e) => e.date == todayStr).toList();

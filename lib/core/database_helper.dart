@@ -26,7 +26,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 9,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -114,6 +114,7 @@ class DatabaseHelper {
         date TEXT NOT NULL,
         status TEXT NOT NULL,
         updated_at TEXT NOT NULL,
+        slot_id TEXT,
         FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE
       )
     ''');
@@ -138,6 +139,29 @@ class DatabaseHelper {
         is_completed INTEGER DEFAULT 1,
         marks REAL,
         FOREIGN KEY (semester_id) REFERENCES semesters (id) ON DELETE CASCADE
+      )
+    ''');
+
+    // IA Marks table
+    await db.execute('''
+      CREATE TABLE ia_marks (
+        id TEXT PRIMARY KEY,
+        subject_id TEXT NOT NULL,
+        ia_number INTEGER NOT NULL,
+        obtained REAL NOT NULL,
+        UNIQUE(subject_id, ia_number),
+        FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE
+      )
+    ''');
+
+    // Past Semesters table
+    await db.execute('''
+      CREATE TABLE past_semesters (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date TEXT NOT NULL,
+        compiled_json TEXT NOT NULL
       )
     ''');
   }
@@ -224,6 +248,44 @@ class DatabaseHelper {
         await db.execute('ALTER TABLE tasks ADD COLUMN rescheduled_count INTEGER DEFAULT 0');
       } catch (e) {
         print('DatabaseHelper: ALTER TABLE tasks error (rescheduled_count might already exist): $e');
+      }
+    }
+    if (oldVersion < 7) {
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS ia_marks (
+            id TEXT PRIMARY KEY,
+            subject_id TEXT NOT NULL,
+            ia_number INTEGER NOT NULL,
+            obtained REAL NOT NULL,
+            UNIQUE(subject_id, ia_number),
+            FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE
+          )
+        ''');
+      } catch (e) {
+        print('DatabaseHelper: CREATE TABLE ia_marks error: \$e');
+      }
+    }
+    if (oldVersion < 8) {
+      try {
+        await db.execute('ALTER TABLE attendance_logs ADD COLUMN slot_id TEXT');
+      } catch (e) {
+        print('DatabaseHelper: ALTER TABLE attendance_logs error (slot_id might already exist): \$e');
+      }
+    }
+    if (oldVersion < 9) {
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS past_semesters (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            start_date TEXT NOT NULL,
+            end_date TEXT NOT NULL,
+            compiled_json TEXT NOT NULL
+          )
+        ''');
+      } catch (e) {
+        print('DatabaseHelper: CREATE TABLE past_semesters error: \$e');
       }
     }
   }

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nova Study - App Preview</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1em;
+        }
+        
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+        }
+        
+        .section h2 {
+            color: #667eea;
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .feature-list {
+            list-style: none;
+        }
+        
+        .feature-list li {
+            padding: 10px 0;
+            padding-left: 30px;
+            position: relative;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .feature-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        
+        .status {
+            background: #f0f4ff;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+        }
+        
+        .status p {
+            color: #333;
+            line-height: 1.8;
+        }
+        
+        .build-info {
+            background: #fff9e6;
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #ffc107;
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #999;
+            font-size: 0.9em;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 Nova Study</h1>
+            <p>AI Academic & Productivity Assistant</p>
+        </div>
+        
+        <div class="content">
+            <div class="section">
+                <h2>Application Status</h2>
+                <div class="status">
+                    <p><strong>✓ Web Server Running</strong></p>
+                    <p>The application is being prepared for web deployment.</p>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>Key Features</h2>
+                <ul class="feature-list">
+                    <li>Smart Study Planning</li>
+                    <li>Academic Progress Tracking</li>
+                    <li>AI-Powered Task Recommendations</li>
+                    <li>Attendance Management</li>
+                    <li>Grade & IA Marks Tracking</li>
+                    <li>Discord Integration</li>
+                    <li>Local Data Storage</li>
+                    <li>Offline Support</li>
+                </ul>
+            </div>
+            
+            <div class="section">
+                <h2>Tech Stack</h2>
+                <ul class="feature-list">
+                    <li>Flutter 3.12+</li>
+                    <li>Dart</li>
+                    <li>Riverpod State Management</li>
+                    <li>SQLite Database</li>
+                    <li>Google Sign-In</li>
+                    <li>Firebase Integration</li>
+                </ul>
+            </div>
+            
+            <div class="build-info">
+                <p><strong>Build Status:</strong> Development version v1.0.9+10</p>
+                <p><strong>Platform:</strong> Flutter Web</p>
+                <p><strong>Status:</strong> Running on localhost:8080</p>
+            </div>
+        </div>
+        
+        <footer>
+            <p>Nova Study - Standalone Application</p>
+            <p style="margin-top: 5px; font-size: 0.85em;">© 2026 WTYeshh</p>
+        </footer>
+    </div>
+</body>
+</html>
